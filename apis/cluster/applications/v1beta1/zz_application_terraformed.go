@@ -21,7 +21,7 @@ func (mg *Application) GetTerraformResourceType() string {
 
 // GetConnectionDetailsMapping for this Application
 func (tr *Application) GetConnectionDetailsMapping() map[string]string {
-	return nil
+	return map[string]string{"clientId": "status.atProvider.clientId"}
 }
 
 // GetObservation of this Application
