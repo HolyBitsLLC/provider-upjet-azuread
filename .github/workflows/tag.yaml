@@ -16,7 +16,7 @@ on:
 
 jobs:
   create-tag:
-    runs-on: [self-hosted, linux, x64, krubecible, holybits-shared]
+    runs-on: [self-hosted, linux, krubecible, holybits-shared]
 
     steps:
       - name: Checkout
