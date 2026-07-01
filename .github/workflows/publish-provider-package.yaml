@@ -1,112 +1,44 @@
-name: Publish Provider Package to Harbor
+name: Build and Push Image
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Version string to use while publishing the package (e.g. v1.0.0-alpha.1)"
-        default: ''
-        required: false
-      go-version:
-        description: 'Go version to use if building needs to be done'
-        default: '1.25.11'
-        required: false
 
 jobs:
-  build-and-push:
-    runs-on: [self-hosted, linux, x64, krubecible, holybits-shared]
+  ci:
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           submodules: recursive
-      
-      - uses: actions/setup-go@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          go-version: ${{ github.event.inputs.go-version }}
-      
-- name: Determine version
-        id: version
-        run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          elif [ -n "${{ github.ref_name }}" ]; then
-            echo "version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-          else
-            echo "version=dev-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
-          fi
-          echo "Using version: $(cat $GITHUB_OUTPUT | grep version= | cut -d= -f2)"
+          go-version-file: go.mod
+
+      - name: Run tests
+        run: go test ./...
 
       - name: Build provider binary
         run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o _output/bin/linux_amd64/provider ./cmd/provider/
+          mkdir -p _output/bin/linux_amd64
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -o _output/bin/linux_amd64/provider ./cmd/provider/
 
-      - name: Prepare Docker build context
-        run: |
-          mkdir -p _output/build
-          cp cluster/images/provider-azuread/Dockerfile _output/build/Dockerfile
-          cp -r _output/bin _output/build/
-
-      - name: Push to Harbor via Kaniko Job
-        env:
-          KANIKO_NAMESPACE: github-actions-runners
-        run: |
-          set -euo pipefail
-          job_name="kaniko-azuread-provider-${GITHUB_SHA::12}"
-          
-          cleanup() {
-            kubectl -n "$KANIKO_NAMESPACE" delete job "$job_name" --ignore-not-found=true || true
-          }
-          trap cleanup EXIT
-          
-          kubectl -n "$KANIKO_NAMESPACE" get secret harbor-push-secret > /dev/null 2>&1 || {
-            echo "ERROR: harbor-push-secret not found"
-            exit 1
-          }
-          
-          VERSION="${{ steps.version.outputs.version }}"
-          
-          kubectl apply -f - << KANIKO_JOB
-          apiVersion: batch/v1
-          kind: Job
-          metadata:
-            name: ${job_name}
-            namespace: ${KANIKO_NAMESPACE}
-          spec:
-            backoffLimit: 0
-            template:
-              spec:
-                containers:
-                - name: kaniko
-                  image: gcr.io/kaniko-project/executor:v1.23.2
-                  args:
-                  - "--context=dir:///workspace/_output/build"
-                  - "--dockerfile=Dockerfile"
-                  - "--destination=harbor.dittmanfamily.com/holybitsllc/provider-azuread:${VERSION}"
-                  - "--destination=harbor.dittmanfamily.com/holybitsllc/provider-azuread:latest"
-                  - "--cache=true"
-                  - "--cache-ttl=72h"
-                  - "--snapshot-mode=redo"
-                  volumeMounts:
-                  - name: workspace
-                    mountPath: /workspace
-                  - name: harbor-push-secret
-                    mountPath: /kaniko/.docker
-                restartPolicy: Never
-                volumes:
-                - name: workspace
-                  hostPath:
-                    path: ${{ github.workspace }}
-                - name: harbor-push-secret
-                  secret:
-                    secretName: harbor-push-secret
-                    items:
-                    - key: .dockerconfigjson
-                      path: config.json
-          KANIKO_JOB
-          
-          kubectl -n "$KANIKO_NAMESPACE" wait --for=condition=complete --timeout=600s "job/${job_name}" 2>/dev/null && exit 0
-          kubectl -n "$KANIKO_NAMESPACE" logs "job/${job_name}"
-          exit 1
+  image:
+    name: Build and Push Container Image
+    needs: [ci]
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+    uses: HolyBitsLLC/harvester-argo/.github/workflows/reusable-kaniko-build.yaml@main
+    with:
+      image: harbor.dittmanfamily.com/holybitsllc/provider-azuread
+      dockerfile: cluster/images/provider-azuread/Dockerfile
+      job-prefix: provider-azuread
+      tags: "sha-${{ github.sha }},main"
+      snapshot-mode: "time"

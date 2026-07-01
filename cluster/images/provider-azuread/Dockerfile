@@ -1,14 +1,17 @@
-FROM alpine:3.23.4
-RUN apk --no-cache add ca-certificates bash
+FROM golang:1.25 AS builder
+WORKDIR /workspace
 
-ARG TARGETOS
-ARG TARGETARCH
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
 
-ENV USER_ID=65532
+COPY go.mod go.sum ./
+RUN go mod download
 
-USER ${USER_ID}
-EXPOSE 8080
+COPY . .
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -o /out/provider ./cmd/provider
 
-ADD "bin/${TARGETOS}_${TARGETARCH}/provider" /usr/local/bin/provider
-
-ENTRYPOINT ["provider"]
+FROM gcr.io/distroless/static:nonroot
+COPY --from=builder /out/provider /usr/local/bin/provider
+USER nonroot:nonroot
+ENTRYPOINT ["/usr/local/bin/provider"]
