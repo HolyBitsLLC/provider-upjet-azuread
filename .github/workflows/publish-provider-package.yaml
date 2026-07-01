@@ -16,10 +16,12 @@ jobs:
   publish-provider-package:
     uses: crossplane-contrib/provider-workflows/.github/workflows/publish-provider-non-family.yml@451c4dc6ad3691b0a702a997a0ac24e8bbc8bbaa # main
     with:
-      repository: provider-azuread
+      repository: provider-upjet-azuread
       version: ${{ github.event.inputs.version }}
       go-version: ${{ github.event.inputs.go-version }}
       cleanup-disk: true
+      publish-package-registry: ghcr.io
+      publish-package-org: holybitsllc
     secrets:
       GHCR_PAT: ${{ secrets.GITHUB_TOKEN }}
       XPKG_MIRROR_TOKEN: ${{ secrets.XPKG_TOKEN }}
