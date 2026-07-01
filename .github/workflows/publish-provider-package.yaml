@@ -13,7 +13,7 @@ on:
         required: false
 
 jobs:
-  build:
+  build-and-push:
     runs-on: [self-hosted, linux, x64, krubecible, holybits-shared]
     steps:
       - uses: actions/checkout@v4
@@ -33,12 +33,65 @@ jobs:
           mkdir -p _output/build
           cp cluster/images/provider-azuread/Dockerfile _output/build/Dockerfile
           cp -r _output/bin _output/build/
-
-  publish:
-    needs: build
-    uses: HolyBitsLLC/harvester-argo/.github/workflows/reusable-kaniko-build.yaml@main
-    with:
-      image: harbor.dittmanfamily.com/holybitsllc/provider-azuread
-      dockerfile: _output/build/Dockerfile
-      job-prefix: azuread-provider
-      tags: "${{ github.event.inputs.version }},latest"
+      
+      - name: Push to Harbor via Kaniko Job
+        env:
+          KANIKO_NAMESPACE: github-actions-runners
+        run: |
+          set -euo pipefail
+          job_name="kaniko-azuread-provider-${GITHUB_SHA::12}"
+          
+          cleanup() {
+            kubectl -n "$KANIKO_NAMESPACE" delete job "$job_name" --ignore-not-found=true || true
+          }
+          trap cleanup EXIT
+          
+          kubectl -n "$KANIKO_NAMESPACE" get secret harbor-push-secret > /dev/null 2>&1 || {
+            echo "ERROR: harbor-push-secret not found"
+            exit 1
+          }
+          
+          VERSION="${{ github.event.inputs.version }}"
+          
+          kubectl apply -f - << KANIKO_JOB
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: ${job_name}
+            namespace: ${KANIKO_NAMESPACE}
+          spec:
+            backoffLimit: 0
+            template:
+              spec:
+                containers:
+                - name: kaniko
+                  image: gcr.io/kaniko-project/executor:v1.23.2
+                  args:
+                  - "--context=dir:///workspace/_output/build"
+                  - "--dockerfile=Dockerfile"
+                  - "--destination=harbor.dittmanfamily.com/holybitsllc/provider-azuread:${VERSION}"
+                  - "--destination=harbor.dittmanfamily.com/holybitsllc/provider-azuread:latest"
+                  - "--cache=true"
+                  - "--cache-ttl=72h"
+                  - "--snapshot-mode=redo"
+                  volumeMounts:
+                  - name: workspace
+                    mountPath: /workspace
+                  - name: harbor-push-secret
+                    mountPath: /kaniko/.docker
+                restartPolicy: Never
+                volumes:
+                - name: workspace
+                  hostPath:
+                    path: ${{ github.workspace }}
+                - name: harbor-push-secret
+                  secret:
+                    secretName: harbor-push-secret
+                    items:
+                    - key: .dockerconfigjson
+                      path: config.json
+          KANIKO_JOB
+          
+          kubectl -n "$KANIKO_NAMESPACE" wait --for=condition=complete --timeout=600s "job/${job_name}" 2>/dev/null && exit 0
+          kubectl -n "$KANIKO_NAMESPACE" logs "job/${job_name}"
+          exit 1
