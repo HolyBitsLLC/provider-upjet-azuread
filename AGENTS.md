@@ -1,0 +1,1 @@
+/srv/shared/homelab/harvester-argo/AGENTS.md

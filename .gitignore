@@ -17,3 +17,6 @@ cover.out
 # common credentials
 kubeconfig
 credentials.json
+
+# asdf local tool versions
+.tool-versions

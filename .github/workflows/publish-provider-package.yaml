@@ -1,6 +1,9 @@
 name: Publish Provider Package to Harbor
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       version:
@@ -24,16 +27,28 @@ jobs:
         with:
           go-version: ${{ github.event.inputs.go-version }}
       
+- name: Determine version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          elif [ -n "${{ github.ref_name }}" ]; then
+            echo "version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=dev-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+          fi
+          echo "Using version: $(cat $GITHUB_OUTPUT | grep version= | cut -d= -f2)"
+
       - name: Build provider binary
         run: |
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o _output/bin/linux_amd64/provider ./cmd/provider/
-      
+
       - name: Prepare Docker build context
         run: |
           mkdir -p _output/build
           cp cluster/images/provider-azuread/Dockerfile _output/build/Dockerfile
           cp -r _output/bin _output/build/
-      
+
       - name: Push to Harbor via Kaniko Job
         env:
           KANIKO_NAMESPACE: github-actions-runners
@@ -51,7 +66,7 @@ jobs:
             exit 1
           }
           
-          VERSION="${{ github.event.inputs.version }}"
+          VERSION="${{ steps.version.outputs.version }}"
           
           kubectl apply -f - << KANIKO_JOB
           apiVersion: batch/v1

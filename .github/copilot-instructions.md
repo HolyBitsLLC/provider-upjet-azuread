@@ -1,0 +1,1 @@
+/srv/shared/homelab/harvester-argo/.github/copilot-instructions.md
