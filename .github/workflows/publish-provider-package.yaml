@@ -1,4 +1,4 @@
-name: Publish Provider Package
+name: Publish Provider Package to Harbor
 
 on:
   workflow_dispatch:
@@ -14,15 +14,34 @@ on:
 
 jobs:
   publish-provider-package:
-    uses: crossplane-contrib/provider-workflows/.github/workflows/publish-provider-non-family.yml@451c4dc6ad3691b0a702a997a0ac24e8bbc8bbaa # main
-    with:
-      repository: provider-upjet-azuread
-      version: ${{ github.event.inputs.version }}
-      go-version: ${{ github.event.inputs.go-version }}
-      cleanup-disk: true
-      publish-package-registry: ghcr.io
-      publish-package-org: holybitsllc
-    secrets:
-      GHCR_PAT: ${{ secrets.GITHUB_TOKEN }}
-      XPKG_MIRROR_TOKEN: ${{ secrets.XPKG_TOKEN }}
-      XPKG_MIRROR_ACCESS_ID: ${{ secrets.XPKG_ACCESS_ID }}
+    runs-on: [self-hosted, linux, x64, krubecible, holybits-shared]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ github.event.inputs.go-version }}
+      
+      - name: Build provider binary
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o _output/bin/linux_amd64/provider ./cmd/provider/
+      
+      - name: Login to Harbor
+        uses: docker/login-action@v3
+        with:
+          registry: harbor.dittmanfamily.com
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+      
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: cluster/images/provider-azuread/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            harbor.dittmanfamily.com/holybitsllc/provider-azuread:${{ github.event.inputs.version }}
+            harbor.dittmanfamily.com/holybitsllc/provider-azuread:latest
