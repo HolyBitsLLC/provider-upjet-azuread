@@ -8,12 +8,10 @@ SPDX-License-Identifier: CC-BY-4.0
 
 <div style="text-align: center;">
 
-![CI](https://github.com/crossplane-contrib/provider-upjet-azuread/workflows/CI/badge.svg)
-[![GitHub release](https://img.shields.io/github/release/crossplane-contrib/provider-upjet-azuread/all.svg)](https://github.com/crossplane-contrib/provider-upjet-azuread/releases)
-[![Go Report Card](https://goreportcard.com/badge/github.com/crossplane-contrib/provider-upjet-azuread)](https://goreportcard.com/report/github.com/crossplane-contrib/provider-upjet-azuread)
-[![Contributors](https://img.shields.io/github/contributors/crossplane-contrib/provider-upjet-azuread)](https://github.com/crossplane-contrib/provider-upjet-azuread/graphs/contributors)
-[![Slack](https://img.shields.io/badge/Slack-4A154B?logo=slack)](https://crossplane.slack.com)
-[![X (formerly Twitter) Follow](https://img.shields.io/twitter/follow/crossplane_io)](https://twitter.com/crossplane_io)
+![CI](https://github.com/HolyBitsLLC/provider-upjet-azuread/workflows/CI/badge.svg)
+[![GitHub release](https://img.shields.io/github/v/release/HolyBitsLLC/provider-upjet-azuread?include_prereleases)](https://github.com/HolyBitsLLC/provider-upjet-azuread/releases)
+[![Container](https://img.shields.io/badge/container-harbor.dittmanfamily.com%2Fholybitsllc%2Fprovider--azuread:latest-blue)](https://harbor.dittmanfamily.com)
+[![Contributors](https://img.shields.io/github/contributors/HolyBitsLLC/provider-upjet-azuread)](https://github.com/HolyBitsLLC/provider-upjet-azuread/graphs/contributors)
 
 </div>
 
