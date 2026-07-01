@@ -1,6 +1,9 @@
 name: Publish Provider Package to Harbor
 
 on:
+  push:
+    branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       version:
