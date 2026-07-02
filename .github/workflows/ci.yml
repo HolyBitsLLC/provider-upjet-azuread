@@ -232,3 +232,11 @@ jobs:
       - name: Check Example Manifests
         run: |
           ./scripts/check-examples.py package/crds examples
+
+  runner-presence-test:
+    name: Self-hosted runner presence test
+    runs-on: [self-hosted, linux, krubecible, holybits-shared]
+    if: always()
+    steps:
+      - name: Runner reached this repo
+        run: echo "Self-hosted runner picked up job in provider-upjet-azuread"
