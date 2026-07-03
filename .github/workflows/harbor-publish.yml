@@ -87,6 +87,6 @@ jobs:
             cluster/images/provider-azuread/kaniko-job.yaml \
             | kubectl -n "$KANIKO_NAMESPACE" apply -f -
 
-          kubectl -n "$KANIKO_NAMESPACE" wait --for=condition=complete --timeout=600s "job/${job_name}" && exit 0
+          kubectl -n "$KANIKO_NAMESPACE" wait --for=condition=complete --timeout=1800s "job/${job_name}" && exit 0
           kubectl -n "$KANIKO_NAMESPACE" logs "job/${job_name}"
           exit 1

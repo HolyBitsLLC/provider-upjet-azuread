@@ -5,7 +5,7 @@ metadata:
   labels:
     app.kubernetes.io/name: kaniko-build
 spec:
-  backoffLimit: 0
+  backoffLimit: 1
   ttlSecondsAfterFinished: 120
   template:
     spec:
