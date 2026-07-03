@@ -35,6 +35,10 @@ jobs:
     name: Build and Push Container Image
     needs: [ci]
     if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - linux
+      - krubecible
+      - holybits-shared
     steps:
-      - run: echo "image job works"
+      - run: echo "image job works on self-hosted"
