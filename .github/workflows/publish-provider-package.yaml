@@ -1,5 +1,10 @@
 name: Build and Push Image
 
+# Runs unit tests on a hosted runner, then delegates the image build to
+# the in-cluster Kaniko runner via the shared reusable-kaniko-build workflow
+# in harvester-argo. Harbor push credentials are mounted from Bitwarden CSI
+# on the self-hosted runner — no GitHub repo secrets needed.
+
 on:
   push:
     branches: [main]
@@ -31,132 +36,14 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
             go build -o _output/bin/linux_amd64/provider ./cmd/provider/
 
-  build-and-push:
+  image:
     name: Build and Push Container Image
     needs: [ci]
     if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
-    runs-on:
-      - self-hosted
-      - linux
-      - krubecible
-      - holybits-shared
-    env:
-      IMAGE: harbor.dittmanfamily.com/holybitsllc/provider-azuread
-      KANIKO_NAMESPACE: github-actions-runners
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Build provider binary (local arch)
-        run: |
-          mkdir -p _output/bin/linux_amd64
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-            go build -o _output/bin/linux_amd64/provider ./cmd/provider/
-
-      - name: Verify in-cluster Harbor push secret
-        run: |
-          set -euo pipefail
-          kubectl -n "$KANIKO_NAMESPACE" get secret harbor-push-secret || {
-            echo "ERROR: harbor-push-secret not found in $KANIKO_NAMESPACE namespace."
-            exit 1
-          }
-
-      - name: Build and push via Kaniko Job
-        run: |
-          set -euo pipefail
-          REPO_NAME="${GITHUB_REPOSITORY##*/}"
-          job_name="kaniko-${REPO_NAME}-${GITHUB_SHA::12}"
-
-          cleanup() {
-            kubectl -n "$KANIKO_NAMESPACE" delete job "$job_name" --ignore-not-found=true || true
-          }
-          trap cleanup EXIT
-
-          TAGS="sha-${GITHUB_SHA},main"
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            TAGS="${TAGS},${{ github.ref_name }}"
-          fi
-
-          DEST_ARGS=""
-          IFS=',' read -ra TAG_ARRAY <<< "$TAGS"
-          for tag in "${TAG_ARRAY[@]}"; do
-            tag="$(echo "$tag" | xargs)"
-            DEST_ARGS="${DEST_ARGS}
-                      - --destination=${IMAGE}:${tag}"
-          done
-
-          cat <<'KJOB' | kubectl -n "$KANIKO_NAMESPACE" apply -f -
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: ${job_name}
-  annotations:
-    argocd.argoproj.io/compare-options: IgnoreExtraneous
-  labels:
-    app.kubernetes.io/name: kaniko-build
-    app.kubernetes.io/instance: ${REPO_NAME}
-spec:
-  backoffLimit: 1
-  ttlSecondsAfterFinished: 120
-  template:
-    spec:
-      restartPolicy: Never
-      serviceAccountName: github-actions-runner-shared
-      containers:
-        - name: kaniko
-          image: gcr.io/kaniko-project/executor:v1.23.2
-          args:
-            - --context=dir:///workspace
-            - --dockerfile=cluster/images/provider-azuread/Dockerfile
-            - --snapshot-mode=time${DEST_ARGS}
-            - --cache=true
-            - --cache-repo=harbor.dittmanfamily.com/holybitsllc/kaniko-cache/${REPO_NAME}
-            - --cache-ttl=336h
-          resources:
-            requests:
-              cpu: 500m
-              memory: 1Gi
-            limits:
-              cpu: "4"
-              memory: 8Gi
-          volumeMounts:
-            - name: workspace
-              mountPath: /workspace
-            - name: docker-config
-              mountPath: /kaniko/.docker
-              readOnly: true
-      volumes:
-        - name: workspace
-          emptyDir: {}
-        - name: docker-config
-          secret:
-            secretName: harbor-push-secret
-            items:
-              - key: .dockerconfigjson
-                path: config.json
-KJOB
-
-          deadline=$((SECONDS + 1800))
-          while true; do
-            if kubectl -n "$KANIKO_NAMESPACE" wait --for=condition=complete --timeout=5s "job/${job_name}" 2>/dev/null; then
-              break
-            fi
-
-            failed_count="$(kubectl -n "$KANIKO_NAMESPACE" get job "$job_name" -o jsonpath='{.status.failed}' || echo 0)"
-            if [ "${failed_count:-0}" != "0" ]; then
-              echo "Kaniko job failed. Dumping logs."
-              kubectl -n "$KANIKO_NAMESPACE" logs "job/${job_name}" --all-containers=true || true
-              exit 1
-            fi
-
-            if [ "$SECONDS" -ge "$deadline" ]; then
-              echo "Kaniko job exceeded 30m timeout. Dumping logs."
-              kubectl -n "$KANIKO_NAMESPACE" logs "job/${job_name}" --all-containers=true || true
-              exit 1
-            fi
-
-            sleep 10
-          done
-
-          kubectl -n "$KANIKO_NAMESPACE" logs "job/${job_name}" --all-containers=true
+    uses: HolyBitsLLC/harvester-argo/.github/workflows/reusable-kaniko-build.yaml@main
+    with:
+      image: harbor.dittmanfamily.com/holybitsllc/provider-azuread
+      dockerfile: cluster/images/provider-azuread/Dockerfile
+      job-prefix: provider-azuread
+      tags: "sha-${{ github.sha }},main"
+      snapshot-mode: "time"
