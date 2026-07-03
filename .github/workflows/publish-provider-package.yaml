@@ -1,44 +1,108 @@
-name: Build and Push Image
+name: Publish Provider Package to Harbor
 
 on:
   push:
     branches: [main]
     tags: ["v*"]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version string (e.g. v2.3.6-holybits)"
+        default: ''
+        required: false
+
+env:
+  GO_VERSION: "1.25.11"
 
 jobs:
-  ci:
-    runs-on: ubuntu-latest
+  build-and-push:
+    runs-on: [self-hosted, linux, krubecible, holybits-shared]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      
+      - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
-
-      - name: Run tests
-        run: go test ./...
-
+          go-version: ${{ env.GO_VERSION }}
+      
       - name: Build provider binary
         run: |
-          mkdir -p _output/bin/linux_amd64
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
             go build -o _output/bin/linux_amd64/provider ./cmd/provider/
-
-  image:
-    name: Build and Push Container Image
-    needs: [ci]
-    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
-    uses: HolyBitsLLC/harvester-argo/.github/workflows/reusable-kaniko-build.yaml@main
-    with:
-      image: harbor.dittmanfamily.com/holybitsllc/provider-azuread
-      dockerfile: cluster/images/provider-azuread/Dockerfile
-      job-prefix: provider-azuread
-      tags: "sha-${{ github.sha }},main"
-      snapshot-mode: "time"
+      
+      - name: Prepare Docker build context
+        run: |
+          mkdir -p _output/build
+          cp cluster/images/provider-azuread/Dockerfile _output/build/Dockerfile
+          cp -r _output/bin _output/build/
+      
+      - name: Push to Harbor via Kaniko Job
+        run: |
+          set -euo pipefail
+          KANIKO_NAMESPACE=github-actions-runners
+          SHORT_SHA=$(echo "$GITHUB_SHA" | cut -c1-12)
+          job_name="kaniko-azuread-${SHORT_SHA}"
+          
+          cleanup() {
+            kubectl -n "$KANIKO_NAMESPACE" delete job "$job_name" --ignore-not-found=true || true
+          }
+          trap cleanup EXIT
+          
+          VERSION="${{ github.event.inputs.version }}"
+          if [ -z "$VERSION" ] && [ "${{ github.ref_type }}" = "tag" ]; then
+            VERSION="${{ github.ref_name }}"
+          fi
+          if [ -z "$VERSION" ]; then
+            VERSION="sha-${SHORT_SHA}"
+          fi
+          
+          echo "Publishing version: $VERSION"
+          
+          cat <<EOF | kubectl -n "$KANIKO_NAMESPACE" apply -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: ${job_name}
+            labels:
+              app.kubernetes.io/name: kaniko-build
+          spec:
+            backoffLimit: 0
+            ttlSecondsAfterFinished: 120
+            template:
+              spec:
+                restartPolicy: Never
+                serviceAccountName: github-actions-runner-shared
+                containers:
+                - name: kaniko
+                  image: gcr.io/kaniko-project/executor:v1.23.2
+                  args:
+                  - "--context=dir:///workspace/_output/build"
+                  - "--dockerfile=Dockerfile"
+                  - "--destination=harbor.dittmanfamily.com/holybitsllc/provider-azuread:${VERSION}"
+                  - "--destination=harbor.dittmanfamily.com/holybitsllc/provider-azuread:latest"
+                  - "--cache=true"
+                  - "--cache-repo=harbor.dittmanfamily.com/holybitsllc/kaniko-cache/provider-azuread"
+                  - "--cache-ttl=336h"
+                  - "--snapshot-mode=time"
+                  volumeMounts:
+                  - name: workspace
+                    mountPath: /workspace
+                  - name: docker-config
+                    mountPath: /kaniko/.docker
+                    readOnly: true
+                volumes:
+                - name: workspace
+                  hostPath:
+                    path: ${{ github.workspace }}
+                - name: docker-config
+                  secret:
+                    secretName: harbor-push-secret
+                    items:
+                    - key: .dockerconfigjson
+                      path: config.json
+          EOF
+          
+          kubectl -n "$KANIKO_NAMESPACE" wait --for=condition=complete --timeout=600s "job/${job_name}" && exit 0
+          kubectl -n "$KANIKO_NAMESPACE" logs "job/${job_name}"
+          exit 1
