@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${JOB_NAME}
+  labels:
+    app.kubernetes.io/name: kaniko-build
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 120
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: github-actions-runner-shared
+      containers:
+      - name: kaniko
+        image: gcr.io/kaniko-project/executor:v1.23.2
+        args:
+        - "--context=dir:///workspace/_output/build"
+        - "--dockerfile=Dockerfile"
+        - "--destination=harbor.dittmanfamily.com/holybitsllc/provider-azuread:${VERSION}"
+        - "--destination=harbor.dittmanfamily.com/holybitsllc/provider-azuread:latest"
+        - "--cache=true"
+        - "--cache-repo=harbor.dittmanfamily.com/holybitsllc/kaniko-cache/provider-azuread"
+        - "--cache-ttl=336h"
+        - "--snapshot-mode=time"
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+        - name: docker-config
+          mountPath: /kaniko/.docker
+          readOnly: true
+      volumes:
+      - name: workspace
+        hostPath:
+          path: ${GITHUB_WORKSPACE}
+      - name: docker-config
+        secret:
+          secretName: harbor-push-secret
+          items:
+          - key: .dockerconfigjson
+            path: config.json

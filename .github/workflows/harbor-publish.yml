@@ -80,49 +80,12 @@ jobs:
 
           echo "Publishing version: $VERSION"
 
-          cat <<EOF | kubectl -n "$KANIKO_NAMESPACE" apply -f -
-          apiVersion: batch/v1
-          kind: Job
-          metadata:
-            name: ${job_name}
-            labels:
-              app.kubernetes.io/name: kaniko-build
-          spec:
-            backoffLimit: 0
-            ttlSecondsAfterFinished: 120
-            template:
-              spec:
-                restartPolicy: Never
-                serviceAccountName: github-actions-runner-shared
-                containers:
-                - name: kaniko
-                  image: gcr.io/kaniko-project/executor:v1.23.2
-                  args:
-                  - "--context=dir:///workspace/_output/build"
-                  - "--dockerfile=Dockerfile"
-                  - "--destination=harbor.dittmanfamily.com/holybitsllc/provider-azuread:${VERSION}"
-                  - "--destination=harbor.dittmanfamily.com/holybitsllc/provider-azuread:latest"
-                  - "--cache=true"
-                  - "--cache-repo=harbor.dittmanfamily.com/holybitsllc/kaniko-cache/provider-azuread"
-                  - "--cache-ttl=336h"
-                  - "--snapshot-mode=time"
-                  volumeMounts:
-                  - name: workspace
-                    mountPath: /workspace
-                  - name: docker-config
-                    mountPath: /kaniko/.docker
-                    readOnly: true
-                volumes:
-                - name: workspace
-                  hostPath:
-                    path: ${{ github.workspace }}
-                - name: docker-config
-                  secret:
-                    secretName: harbor-push-secret
-                    items:
-                    - key: .dockerconfigjson
-                      path: config.json
-EOF
+          sed \
+            -e 's|${JOB_NAME}|'"${job_name}"'|g' \
+            -e 's|${VERSION}|'"${VERSION}"'|g' \
+            -e 's|${GITHUB_WORKSPACE}|'"${GITHUB_WORKSPACE}"'|g' \
+            cluster/images/provider-azuread/kaniko-job.yaml \
+            | kubectl -n "$KANIKO_NAMESPACE" apply -f -
 
           kubectl -n "$KANIKO_NAMESPACE" wait --for=condition=complete --timeout=600s "job/${job_name}" && exit 0
           kubectl -n "$KANIKO_NAMESPACE" logs "job/${job_name}"
