@@ -3,7 +3,7 @@ name: Build and Push Image
 # Runs unit tests on a hosted runner, then delegates the image build to
 # the in-cluster Kaniko runner via the shared reusable-kaniko-build workflow
 # in harvester-argo. Harbor push credentials are mounted from Bitwarden CSI
-# on the self-hosted runner — no GitHub repo secrets needed.
+# on the self-hosted runner -- no GitHub repo secrets needed.
 
 on:
   push:
