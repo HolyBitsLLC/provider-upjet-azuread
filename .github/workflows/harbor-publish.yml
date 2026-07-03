@@ -122,7 +122,7 @@ jobs:
                     items:
                     - key: .dockerconfigjson
                       path: config.json
-          EOF
+EOF
 
           kubectl -n "$KANIKO_NAMESPACE" wait --for=condition=complete --timeout=600s "job/${job_name}" && exit 0
           kubectl -n "$KANIKO_NAMESPACE" logs "job/${job_name}"
