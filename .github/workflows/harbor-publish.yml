@@ -30,3 +30,10 @@ jobs:
           mkdir -p _output/bin/linux_amd64
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
             go build -o _output/bin/linux_amd64/provider ./cmd/provider/
+
+  image:
+    name: Build and Push Container Image
+    needs: [ci]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "image job works"
