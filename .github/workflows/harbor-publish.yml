@@ -39,6 +39,7 @@ jobs:
       - self-hosted
       - linux
       - krubecible
+      - holybits-shared
     steps:
       - uses: actions/checkout@v4
 
