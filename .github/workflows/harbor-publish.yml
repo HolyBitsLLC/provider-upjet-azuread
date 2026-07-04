@@ -117,13 +117,13 @@ jobs:
                     image: gcr.io/kaniko-project/executor:v1.23.2
                     securityContext:
                       allowPrivilegeEscalation: false
-                      resources:
-                        requests:
-                          cpu: 500m
-                          memory: 2Gi
-                        limits:
-                          cpu: "4"
-                          memory: 16Gi
+                    resources:
+                      requests:
+                        cpu: 500m
+                        memory: 2Gi
+                      limits:
+                        cpu: "4"
+                        memory: 16Gi
                     args:
                       - --context=dir:///workspace/src
                       - --dockerfile=/workspace/src/cluster/images/provider-azuread/Dockerfile
