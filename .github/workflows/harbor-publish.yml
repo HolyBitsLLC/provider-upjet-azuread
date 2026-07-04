@@ -84,13 +84,7 @@ jobs:
           set -euo pipefail
 
           SHORT_SHA="${GITHUB_SHA::12}"
-          job_name="kaniko-azuread-${SHORT_SHA}"
           REPO_NAME="${GITHUB_REPOSITORY##*/}"
-
-          cleanup() {
-            kubectl -n "$KANIKO_NAMESPACE" delete job "$job_name" --ignore-not-found=true || true
-          }
-          trap cleanup EXIT
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ inputs.version }}"
@@ -99,6 +93,14 @@ jobs:
           else
             VERSION="sha-${SHORT_SHA}"
           fi
+
+          SANITIZED_VERSION="$(echo "$VERSION" | tr '/' '-' | tr '.' '-')"
+          job_name="kaniko-azuread-${SANITIZED_VERSION}-${SHORT_SHA}"
+
+          cleanup() {
+            kubectl -n "$KANIKO_NAMESPACE" delete job "$job_name" --ignore-not-found=true || true
+          }
+          trap cleanup EXIT
 
           echo "Publishing version: $VERSION"
 
