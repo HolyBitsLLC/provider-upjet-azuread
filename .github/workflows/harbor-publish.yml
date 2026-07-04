@@ -41,28 +41,11 @@ jobs:
       - krubecible
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - name: Build provider binary
-        run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-            go build -o _output/bin/linux_amd64/provider ./cmd/provider/
-
-      - name: Prepare Docker build context
-        run: |
-          mkdir -p _output/build
-          cp cluster/images/provider-azuread/Dockerfile _output/build/Dockerfile
-          cp -r _output/bin _output/build/
 
       - name: Push to Harbor via Kaniko Job
         env:
           KANIKO_NAMESPACE: github-actions-runners
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
@@ -111,8 +94,8 @@ jobs:
                         cpu: "4"
                         memory: 8Gi
                     args:
-                      - --context=dir:///workspace/_output/build
-                      - --dockerfile=/workspace/_output/build/Dockerfile
+                      - --context=dir:///workspace/src
+                      - --dockerfile=/workspace/src/cluster/images/provider-azuread/Dockerfile
                       - --destination=harbor.dittmanfamily.com/holybitsllc/provider-azuread:${VERSION}
                       - --destination=harbor.dittmanfamily.com/holybitsllc/provider-azuread:latest
                       - --cache=true
@@ -125,10 +108,35 @@ jobs:
                       - name: docker-config
                         mountPath: /kaniko/.docker
                         readOnly: true
+                initContainers:
+                  - name: clone-repo
+                    image: docker.io/alpine/git:2.47.2
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                    resources:
+                      requests:
+                        cpu: 100m
+                        memory: 128Mi
+                      limits:
+                        cpu: 500m
+                        memory: 512Mi
+                    command: ["sh", "-lc"]
+                    args:
+                      - |
+                        set -euo pipefail
+                        git clone --depth=1 "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" /workspace/src
+                        cd /workspace/src
+                        git fetch --depth=1 origin "${GITHUB_SHA}"
+                        git checkout "${GITHUB_SHA}"
+                    env:
+                      - name: GIT_TOKEN
+                        value: "${GITHUB_TOKEN}"
+                    volumeMounts:
+                      - name: workspace
+                        mountPath: /workspace
                 volumes:
                   - name: workspace
-                    hostPath:
-                      path: ${{ github.workspace }}
+                    emptyDir: {}
                   - name: docker-config
                     secret:
                       secretName: harbor-push-secret
