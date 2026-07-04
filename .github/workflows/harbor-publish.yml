@@ -42,6 +42,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install kubectl
+        run: |
+          set -euo pipefail
+          if command -v kubectl >/dev/null 2>&1; then
+            kubectl version --client
+            exit 0
+          fi
+          KUBECTL_VERSION="v1.31.2"
+          ARCH="$(uname -m)"
+          case "$ARCH" in
+            aarch64|arm64) ARCH="arm64" ;;
+            x86_64|amd64)  ARCH="amd64" ;;
+          esac
+          curl -fsSL -o /usr/local/bin/kubectl \
+            "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl"
+          chmod +x /usr/local/bin/kubectl
+          kubectl version --client
+
+      - name: Verify in-cluster Harbor push secret
+        run: |
+          set -euo pipefail
+          KANIKO_NAMESPACE=github-actions-runners
+          kubectl -n "$KANIKO_NAMESPACE" get secret harbor-push-secret || {
+            echo "ERROR: harbor-push-secret not found in $KANIKO_NAMESPACE namespace."
+            exit 1
+          }
+
       - name: Push to Harbor via Kaniko Job
         env:
           KANIKO_NAMESPACE: github-actions-runners
