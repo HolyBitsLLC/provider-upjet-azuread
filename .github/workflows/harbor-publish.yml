@@ -45,7 +45,6 @@ jobs:
       - name: Push to Harbor via Kaniko Job
         env:
           KANIKO_NAMESPACE: github-actions-runners
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
@@ -124,13 +123,10 @@ jobs:
                     args:
                       - |
                         set -euo pipefail
-                        git clone --depth=1 "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" /workspace/src
+                        git clone --depth=1 "https://github.com/${GITHUB_REPOSITORY}.git" /workspace/src
                         cd /workspace/src
                         git fetch --depth=1 origin "${GITHUB_SHA}"
                         git checkout "${GITHUB_SHA}"
-                    env:
-                      - name: GIT_TOKEN
-                        value: "${GITHUB_TOKEN}"
                     volumeMounts:
                       - name: workspace
                         mountPath: /workspace
