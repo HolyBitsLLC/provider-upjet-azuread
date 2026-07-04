@@ -21,4 +21,11 @@ USER ${USER_ID}
 EXPOSE 8080
 
 COPY --from=builder /provider /usr/local/bin/provider
+
+# Crossplane package metadata — required for the image to be consumed as a
+# Crossplane provider package. Without package.yaml the provider will fail
+# with "package.yaml not found in package".
+COPY package/crossplane.yaml /package.yaml
+COPY package/crds/ /crds/
+
 ENTRYPOINT ["provider"]
