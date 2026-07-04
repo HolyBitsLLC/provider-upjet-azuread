@@ -61,11 +61,14 @@ jobs:
           cp -r _output/bin _output/build/
 
       - name: Push to Harbor via Kaniko Job
+        env:
+          KANIKO_NAMESPACE: github-actions-runners
         run: |
           set -euo pipefail
-          KANIKO_NAMESPACE=github-actions-runners
-          SHORT_SHA=$(echo "$GITHUB_SHA" | cut -c1-12)
+
+          SHORT_SHA="${GITHUB_SHA::12}"
           job_name="kaniko-azuread-${SHORT_SHA}"
+          REPO_NAME="${GITHUB_REPOSITORY##*/}"
 
           cleanup() {
             kubectl -n "$KANIKO_NAMESPACE" delete job "$job_name" --ignore-not-found=true || true
@@ -80,13 +83,80 @@ jobs:
 
           echo "Publishing version: $VERSION"
 
-          sed \
-            -e 's|${JOB_NAME}|'"${job_name}"'|g' \
-            -e 's|${VERSION}|'"${VERSION}"'|g' \
-            -e 's|${GITHUB_WORKSPACE}|'"${GITHUB_WORKSPACE}"'|g' \
-            cluster/images/provider-azuread/kaniko-job.yaml \
-            | kubectl -n "$KANIKO_NAMESPACE" apply -f -
+          cat <<EOF | kubectl -n "$KANIKO_NAMESPACE" apply -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: ${job_name}
+            annotations:
+              argocd.argoproj.io/compare-options: IgnoreExtraneous
+            labels:
+              app.kubernetes.io/name: kaniko-build
+              app.kubernetes.io/instance: ${REPO_NAME}
+          spec:
+            backoffLimit: 0
+            ttlSecondsAfterFinished: 120
+            template:
+              spec:
+                restartPolicy: Never
+                serviceAccountName: github-actions-runner-shared
+                containers:
+                  - name: kaniko
+                    image: gcr.io/kaniko-project/executor:v1.23.2
+                    resources:
+                      requests:
+                        cpu: 500m
+                        memory: 1Gi
+                      limits:
+                        cpu: "4"
+                        memory: 8Gi
+                    args:
+                      - --context=dir:///workspace/_output/build
+                      - --dockerfile=/workspace/_output/build/Dockerfile
+                      - --destination=harbor.dittmanfamily.com/holybitsllc/provider-azuread:${VERSION}
+                      - --destination=harbor.dittmanfamily.com/holybitsllc/provider-azuread:latest
+                      - --cache=true
+                      - --cache-repo=harbor.dittmanfamily.com/holybitsllc/kaniko-cache/${REPO_NAME}
+                      - --cache-ttl=336h
+                      - --snapshot-mode=time
+                    volumeMounts:
+                      - name: workspace
+                        mountPath: /workspace
+                      - name: docker-config
+                        mountPath: /kaniko/.docker
+                        readOnly: true
+                volumes:
+                  - name: workspace
+                    hostPath:
+                      path: ${{ github.workspace }}
+                  - name: docker-config
+                    secret:
+                      secretName: harbor-push-secret
+                      items:
+                        - key: .dockerconfigjson
+                          path: config.json
+          EOF
 
-          kubectl -n "$KANIKO_NAMESPACE" wait --for=condition=complete --timeout=1800s "job/${job_name}" && exit 0
-          kubectl -n "$KANIKO_NAMESPACE" logs "job/${job_name}"
-          exit 1
+          deadline=$((SECONDS + 1800))
+          while true; do
+            if kubectl -n "$KANIKO_NAMESPACE" wait --for=condition=complete --timeout=5s "job/${job_name}" 2>/dev/null; then
+              break
+            fi
+
+            failed_count="$(kubectl -n "$KANIKO_NAMESPACE" get job "$job_name" -o jsonpath='{.status.failed}' 2>/dev/null || echo 0)"
+            if [ "${failed_count:-0}" != "0" ]; then
+              echo "::error::Kaniko job failed. Dumping logs."
+              kubectl -n "$KANIKO_NAMESPACE" logs "job/${job_name}" --all-containers=true || true
+              exit 1
+            fi
+
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::Kaniko job exceeded 30m timeout. Dumping logs."
+              kubectl -n "$KANIKO_NAMESPACE" logs "job/${job_name}" --all-containers=true || true
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          kubectl -n "$KANIKO_NAMESPACE" logs "job/${job_name}" --all-containers=true
