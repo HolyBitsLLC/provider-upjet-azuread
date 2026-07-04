@@ -55,10 +55,12 @@ jobs:
             aarch64|arm64) ARCH="arm64" ;;
             x86_64|amd64)  ARCH="amd64" ;;
           esac
-          curl -fsSL -o /usr/local/bin/kubectl \
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o "$HOME/.local/bin/kubectl" \
             "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl"
-          chmod +x /usr/local/bin/kubectl
-          kubectl version --client
+          chmod +x "$HOME/.local/bin/kubectl"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/kubectl" version --client
 
       - name: Verify in-cluster Harbor push secret
         run: |
