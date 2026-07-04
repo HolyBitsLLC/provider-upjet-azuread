@@ -7,6 +7,11 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Semantic version tag (e.g. v2.3.8-holybits). Overrides auto-detection."
+        required: false
+        type: string
 
 jobs:
   ci:
@@ -87,7 +92,9 @@ jobs:
           }
           trap cleanup EXIT
 
-          if [ "${{ github.ref_type }}" = "tag" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
             VERSION="${{ github.ref_name }}"
           else
             VERSION="sha-${SHORT_SHA}"

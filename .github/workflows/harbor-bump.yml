@@ -1,0 +1,62 @@
+name: Auto Semver Bump
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute next semver tag
+        id: bump
+        run: |
+          set -euo pipefail
+
+          LATEST="$(git tag -l 'v*-holybits' --sort=-v:refname | head -1)"
+          if [ -z "$LATEST" ]; then
+            NEXT="v0.0.1-holybits"
+          else
+            BASE="${LATEST#v}"
+            BASE="${BASE%-holybits}"
+            MAJOR="${BASE%%.*}"
+            REST="${BASE#*.}"
+            MINOR="${REST%%.*}"
+            PATCH="${REST#*.}"
+            PATCH=$((PATCH + 1))
+            NEXT="v${MAJOR}.${MINOR}.${PATCH}-holybits"
+          fi
+
+          echo "latest=$LATEST"
+          echo "next=$NEXT"
+          echo "next_tag=$NEXT" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        run: |
+          set -euo pipefail
+
+          TAG="${{ steps.bump.outputs.next_tag }}"
+
+          git config user.name "semver-bot"
+          git config user.email "semver-bot@holybits.dev"
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists, skipping."
+            exit 0
+          fi
+
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+
+      - name: Dispatch Harbor publish on new tag
+        run: |
+          gh workflow run harbor-publish.yml \
+            --ref "${{ steps.bump.outputs.next_tag }}" \
+            -f version="${{ steps.bump.outputs.next_tag }}"
+        env:
+          GH_TOKEN: ${{ github.token }}
