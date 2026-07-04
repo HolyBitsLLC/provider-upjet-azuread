@@ -112,6 +112,8 @@ jobs:
                 containers:
                   - name: kaniko
                     image: gcr.io/kaniko-project/executor:v1.23.2
+                    securityContext:
+                      allowPrivilegeEscalation: false
                     resources:
                       requests:
                         cpu: 500m
@@ -170,7 +172,7 @@ jobs:
 
           deadline=$((SECONDS + 1800))
           while true; do
-            if kubectl -n "$KANIKO_NAMESPACE" wait --for=condition=complete --timeout=5s "job/${job_name}" 2>/dev/null; then
+            if kubectl -n "$KANIKO_NAMESPACE" wait --for=condition=complete --timeout=5s "job/${job_name}"; then
               break
             fi
 
