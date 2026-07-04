@@ -1,4 +1,4 @@
-FROM golang:1.25.11-alpine@sha256:cf92d27916083273afc9eac40a6150723fc3cc82c264957326e5fa34f010e2da AS builder
+FROM golang:1.25.11-alpine AS builder
 RUN apk --no-cache add ca-certificates git
 
 WORKDIR /src
