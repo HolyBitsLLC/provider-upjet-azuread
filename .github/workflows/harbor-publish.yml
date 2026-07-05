@@ -177,9 +177,13 @@ jobs:
           IMAGE="${REGISTRY}/${REPO}:${VERSION}"
           echo "Packaging runtime image ${IMAGE} as Crossplane package"
 
-          # Reuse the local tarball from the previous step
+          # Build from a staging dir with only Crossplane manifests
+          PKG_TMP="/tmp/xpkg-root"
+          rm -rf "$PKG_TMP" && mkdir -p "$PKG_TMP"
+          cp -r package "$PKG_TMP/"
+
           crank xpkg build \
-            --package-root=. \
+            --package-root="$PKG_TMP" \
             --embed-runtime-image-tarball=/tmp/runtime.tar \
             --package-file=/tmp/provider.xpkg
 
