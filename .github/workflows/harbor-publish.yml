@@ -58,7 +58,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: provider-binary
-          path: _output/bin/
+          path: bin/
 
       - name: Build and push runtime image with Kaniko
         env:
