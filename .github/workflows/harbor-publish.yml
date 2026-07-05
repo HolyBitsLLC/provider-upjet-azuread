@@ -36,6 +36,12 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
             go build -o _output/bin/linux_amd64/provider ./cmd/provider/
 
+      - name: Upload provider binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: provider-binary
+          path: _output/bin/
+
   image:
     name: Build and Push Container Image
     needs: [ci]
@@ -135,7 +141,7 @@ jobs:
                         memory: 16Gi
                     args:
                       - --context=dir:///workspace/src
-                      - --dockerfile=/workspace/src/cluster/images/provider-azuread/Dockerfile
+                      - --dockerfile=/workspace/src/cluster/images/provider-azuread/Dockerfile.kaniko
                       - --destination=harbor.dittmanfamily.com/holybitsllc/provider-azuread:${VERSION}
                       - --destination=harbor.dittmanfamily.com/holybitsllc/provider-azuread:latest
                       - --cache=true
@@ -145,6 +151,8 @@ jobs:
                     volumeMounts:
                       - name: workspace
                         mountPath: /workspace
+                      - name: gomodcache
+                        mountPath: /go/pkg/mod
                       - name: docker-config
                         mountPath: /kaniko/.docker
                         readOnly: true
@@ -168,11 +176,39 @@ jobs:
                         cd /workspace/src
                         git fetch --depth=1 origin "${GITHUB_SHA}"
                         git checkout "${GITHUB_SHA}"
+                        mkdir -p bin/linux_amd64
                     volumeMounts:
                       - name: workspace
                         mountPath: /workspace
+                  - name: go-build
+                    image: golang:1.25.11-alpine
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                    resources:
+                      requests:
+                        cpu: 1000m
+                        memory: 2Gi
+                      limits:
+                        cpu: "4"
+                        memory: 8Gi
+                    command: ["sh", "-lc"]
+                    args:
+                      - |
+                        set -euo pipefail
+                        apk --no-cache add git
+                        cd /workspace/src
+                        CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+                          go build -o bin/linux_amd64/provider ./cmd/provider/
+                        echo "Binary built: $(ls -lh bin/linux_amd64/provider)"
+                    volumeMounts:
+                      - name: workspace
+                        mountPath: /workspace
+                      - name: gomodcache
+                        mountPath: /go/pkg/mod
                 volumes:
                   - name: workspace
+                    emptyDir: {}
+                  - name: gomodcache
                     emptyDir: {}
                   - name: docker-config
                     secret:
@@ -182,7 +218,7 @@ jobs:
                           path: config.json
           EOF
 
-          deadline=$((SECONDS + 1800))
+          deadline=$((SECONDS + 3600))
           while true; do
             if kubectl -n "$KANIKO_NAMESPACE" wait --for=condition=complete --timeout=5s "job/${job_name}"; then
               break
@@ -196,7 +232,7 @@ jobs:
             fi
 
             if [ "$SECONDS" -ge "$deadline" ]; then
-              echo "::error::Kaniko job exceeded 30m timeout. Dumping logs."
+              echo "::error::Kaniko job exceeded 60m timeout. Dumping logs."
               kubectl -n "$KANIKO_NAMESPACE" logs "job/${job_name}" --all-containers=true || true
               exit 1
             fi
