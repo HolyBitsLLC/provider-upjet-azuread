@@ -15,7 +15,7 @@ spec:
       - args:
         - |
           set -euo pipefail
-          git clone --depth=1 "https://github.com/${GITHUB_REPOSITORY}.git" /workspace
+          git clone --depth=1 "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" /workspace
           cd /workspace
           git fetch --depth=1 origin "${GITHUB_SHA}"
           git checkout "${GITHUB_SHA}"
@@ -38,28 +38,33 @@ spec:
       - args:
         - |
           set -euo pipefail
-          apk --no-cache add git
-          cd /workspace
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-            go build -v -o bin/linux_amd64/provider ./cmd/provider/
-          ls -lh bin/linux_amd64/provider
+          apk --no-cache add curl unzip
+          echo "Downloading binary from GitHub artifact..."
+          curl -sf -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -L -o /tmp/binary.zip "${ARTIFACT_URL}"
+          unzip -o /tmp/binary.zip -d /workspace/bin/linux_amd64/
+          chmod +x /workspace/bin/linux_amd64/provider
+          ls -lh /workspace/bin/linux_amd64/provider
         command:
         - sh
         - -lc
-        image: golang:1.25.11-alpine
-        name: go-build
+        env:
+        - name: GITHUB_TOKEN
+          value: "${GITHUB_TOKEN}"
+        - name: ARTIFACT_URL
+          value: "${ARTIFACT_URL}"
+        image: alpine:3.23.4
+        name: fetch-binary
         resources:
           limits:
-            cpu: "4"
-            memory: 8Gi
+            cpu: 500m
+            memory: 512Mi
           requests:
-            cpu: 2000m
-            memory: 4Gi
+            cpu: 100m
+            memory: 128Mi
         volumeMounts:
         - mountPath: /workspace
           name: workspace
-        - mountPath: /go/pkg/mod
-          name: gomodcache
       containers:
       - args:
         - --context=dir:///workspace
@@ -90,8 +95,6 @@ spec:
       volumes:
       - emptyDir: {}
         name: workspace
-      - emptyDir: {}
-        name: gomodcache
       - name: docker-config
         secret:
           items:

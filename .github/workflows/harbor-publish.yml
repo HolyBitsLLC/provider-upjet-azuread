@@ -14,6 +14,9 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,10 +31,29 @@ jobs:
       - name: Run tests
         run: go test ./...
 
+      - name: Build provider binary
+        run: |
+          set -euo pipefail
+          mkdir -p _output/linux_amd64
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -v -o _output/linux_amd64/provider ./cmd/provider/
+          ls -lh _output/linux_amd64/provider
+
+      - name: Upload provider binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: provider-binary
+          path: _output/linux_amd64/provider
+          retention-days: 1
+
   image:
     name: Build and Push Container Image
     needs: [ci]
     if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
     runs-on:
       - self-hosted
       - linux
@@ -56,6 +78,14 @@ jobs:
           chmod +x "$HOME/.local/bin/kubectl"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
+      - name: Install jq
+        run: |
+          set -euo pipefail
+          if command -v jq >/dev/null 2>&1; then exit 0; fi
+          curl -fsSL -o "$HOME/.local/bin/jq" \
+            "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64"
+          chmod +x "$HOME/.local/bin/jq"
+
       - name: Verify Harbor push secret
         run: |
           kubectl -n github-actions-runners get secret harbor-push-secret -o name
@@ -77,6 +107,7 @@ jobs:
       - name: Push via Kaniko K8s Job
         env:
           KANIKO_NS: github-actions-runners
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -100,9 +131,23 @@ jobs:
 
           echo "Version: $VERSION → ${IMAGE}"
 
+          # Get the artifact download URL from the ci job
+          ARTIFACTS_URL="https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts"
+          ARTIFACT_ID="$(curl -sf -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            "${ARTIFACTS_URL}?name=provider-binary" | \
+            jq -r '.artifacts[0].id')"
+          if [ -z "$ARTIFACT_ID" ] || [ "$ARTIFACT_ID" = "null" ]; then
+            echo "::error::Could not find provider-binary artifact"
+            exit 1
+          fi
+          echo "Artifact ID: ${ARTIFACT_ID}"
+
           kubectl -n "$KANIKO_NS" delete job "$JOB_NAME" --ignore-not-found=true
 
-          export GITHUB_REPOSITORY GITHUB_SHA REGISTRY REPO IMAGE REPO_SHORT JOB_NAME
+          export GITHUB_REPOSITORY GITHUB_SHA REGISTRY REPO IMAGE REPO_SHORT JOB_NAME GH_TOKEN
+          export ARTIFACT_URL="https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip"
+          export GITHUB_TOKEN="${{ github.token }}"
           envsubst < cluster/images/provider-azuread/kaniko-job.yaml.tmpl \
             | kubectl -n "$KANIKO_NS" apply -f -
 
