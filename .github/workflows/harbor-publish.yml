@@ -206,15 +206,21 @@ jobs:
 
           kubectl -n "$KANIKO_NAMESPACE" logs "job/${job_name}" --all-containers=true
 
-      - name: Install crane
+      - name: Install crane and crossplane CLI
         run: |
           set -euo pipefail
-          CRANE_VERSION="v0.20.2"
           mkdir -p "$HOME/.local/bin"
+
+          CRANE_VERSION="v0.20.2"
           curl -fsSL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz" \
             | tar xz -C "$HOME/.local/bin" crane
+
+          CROSSPLANE_VERSION="v2.2.0"
+          curl -fsSL "https://releases.crossplane.io/stable/${CROSSPLANE_VERSION}/bin/linux_amd64/crank" \
+            -o "$HOME/.local/bin/crank"
+          chmod +x "$HOME/.local/bin/crank"
+
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          "$HOME/.local/bin/crane" version
 
       - name: Build and push Crossplane package
         env:
@@ -242,7 +248,7 @@ jobs:
           # Build the Crossplane xpkg package — embeds runtime image,
           # package.yaml, and CRDs into a proper OCI image with Crossplane
           # annotations that the package manager can extract.
-          go run github.com/crossplane/crossplane/cmd/crank@v2.2.0 xpkg build \
+          crank xpkg build \
             --package-root=. \
             --embed-runtime-image-tarball=/tmp/runtime.tar \
             --package-file=/tmp/provider.xpkg
