@@ -6,6 +6,7 @@ metadata:
   labels:
     app.kubernetes.io/instance: ${REPO_SHORT}
     app.kubernetes.io/name: kaniko-build
+  name: ${JOB_NAME}
 spec:
   backoffLimit: 0
   template:
