@@ -114,14 +114,17 @@ jobs:
           tar -cf /tmp/layer.tar -C /tmp/layer .
           ls -lh /tmp/layer.tar
 
-          # Build image: alpine base + our provider layer
+          # Build image: alpine base + our provider layer → local tarball
           crane append \
             -b alpine:3.23.4 \
             -f /tmp/layer.tar \
-            -t "${IMAGE}"
+            -t "temp" \
+            -o /tmp/runtime.tar
 
-          # Also tag as latest
-          crane tag "${IMAGE}" "${REGISTRY}/${REPO}:latest"
+          # Push to Harbor
+          crane push /tmp/runtime.tar "${IMAGE}"
+          crane push /tmp/runtime.tar "${REGISTRY}/${REPO}:latest"
+
           echo "Pushed ${IMAGE} and latest"
 
       - name: Install crank (Crossplane CLI)
@@ -153,8 +156,7 @@ jobs:
           IMAGE="${REGISTRY}/${REPO}:${VERSION}"
           echo "Packaging runtime image ${IMAGE} as Crossplane package"
 
-          crane pull "${IMAGE}" /tmp/runtime.tar
-
+          # Reuse the local tarball from the previous step
           crank xpkg build \
             --package-root=. \
             --embed-runtime-image-tarball=/tmp/runtime.tar \
