@@ -1,0 +1,100 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    argocd.argoproj.io/compare-options: IgnoreExtraneous
+  labels:
+    app.kubernetes.io/instance: ${REPO_SHORT}
+    app.kubernetes.io/name: kaniko-build
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      initContainers:
+      - args:
+        - |
+          set -euo pipefail
+          git clone --depth=1 "https://github.com/${GITHUB_REPOSITORY}.git" /workspace
+          cd /workspace
+          git fetch --depth=1 origin "${GITHUB_SHA}"
+          git checkout "${GITHUB_SHA}"
+          mkdir -p bin/linux_amd64
+        command:
+        - sh
+        - -lc
+        image: docker.io/alpine/git:2.47.2
+        name: clone-repo
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        volumeMounts:
+        - mountPath: /workspace
+          name: workspace
+      - args:
+        - |
+          set -euo pipefail
+          apk --no-cache add git
+          cd /workspace
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -v -o bin/linux_amd64/provider ./cmd/provider/
+          ls -lh bin/linux_amd64/provider
+        command:
+        - sh
+        - -lc
+        image: golang:1.25.11-alpine
+        name: go-build
+        resources:
+          limits:
+            cpu: "4"
+            memory: 8Gi
+          requests:
+            cpu: 2000m
+            memory: 4Gi
+        volumeMounts:
+        - mountPath: /workspace
+          name: workspace
+        - mountPath: /go/pkg/mod
+          name: gomodcache
+      containers:
+      - args:
+        - --context=dir:///workspace
+        - --dockerfile=/workspace/cluster/images/provider-azuread/Dockerfile.kaniko
+        - --destination=${IMAGE}
+        - --destination=${REGISTRY}/${REPO}:latest
+        - --cache=true
+        - --cache-repo=${REGISTRY}/holybitsllc/kaniko-cache/${REPO_SHORT}
+        - --cache-ttl=336h
+        - --snapshot-mode=time
+        image: gcr.io/kaniko-project/executor:v1.23.2
+        name: kaniko
+        resources:
+          limits:
+            cpu: "4"
+            memory: 16Gi
+          requests:
+            cpu: 500m
+            memory: 2Gi
+        volumeMounts:
+        - mountPath: /workspace
+          name: workspace
+        - mountPath: /kaniko/.docker
+          name: docker-config
+          readOnly: true
+      restartPolicy: Never
+      serviceAccountName: github-actions-runner-shared
+      volumes:
+      - emptyDir: {}
+        name: workspace
+      - emptyDir: {}
+        name: gomodcache
+      - name: docker-config
+        secret:
+          items:
+          - key: .dockerconfigjson
+            path: config.json
+          secretName: harbor-push-secret
+  ttlSecondsAfterFinished: 120
