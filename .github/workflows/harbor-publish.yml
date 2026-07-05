@@ -68,12 +68,33 @@ jobs:
           name: provider-binary
           path: _output/linux_amd64
 
+      - name: Install kubectl
+        run: |
+          set -euo pipefail
+          if command -v kubectl >/dev/null 2>&1; then exit 0; fi
+          KUBECTL_VERSION="v1.31.2"
+          ARCH="$(uname -m)"
+          case "$ARCH" in
+            aarch64|arm64) ARCH="arm64" ;;
+            x86_64|amd64)  ARCH="amd64" ;;
+          esac
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o "$HOME/.local/bin/kubectl" \
+            "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl"
+          chmod +x "$HOME/.local/bin/kubectl"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
       - name: Setup Harbor auth
         run: |
-          mkdir -p ~/.docker
+          set -euo pipefail
+          DOCKER_CONFIG="${RUNNER_TEMP}/docker-auth"
+          mkdir -p "$DOCKER_CONFIG"
           kubectl -n github-actions-runners get secret harbor-push-secret \
-            -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d > ~/.docker/config.json
-          echo "Harbor auth configured"
+            -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d > "${DOCKER_CONFIG}/config.json"
+          echo "Harbor auth written to ${DOCKER_CONFIG}/config.json"
+          # Verify it has an auth entry
+          python3 -c "import json; d=json.load(open('${DOCKER_CONFIG}/config.json')); print('Registries:', list(d.get('auths',{}).keys()))"
+          echo "DOCKER_CONFIG=${DOCKER_CONFIG}" >> "$GITHUB_ENV"
 
       - name: Install crane
         run: |
