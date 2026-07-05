@@ -60,6 +60,21 @@ jobs:
           name: provider-binary
           path: bin/
 
+      - name: Install kubectl
+        run: |
+          set -euo pipefail
+          KUBECTL_VERSION="v1.31.2"
+          ARCH="$(uname -m)"
+          case "$ARCH" in
+            aarch64|arm64) ARCH="arm64" ;;
+            x86_64|amd64)  ARCH="amd64" ;;
+          esac
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o "$HOME/.local/bin/kubectl" \
+            "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl"
+          chmod +x "$HOME/.local/bin/kubectl"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
       - name: Build and push runtime image with Kaniko
         env:
           REGISTRY: harbor.dittmanfamily.com
