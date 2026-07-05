@@ -205,3 +205,54 @@ jobs:
           done
 
           kubectl -n "$KANIKO_NAMESPACE" logs "job/${job_name}" --all-containers=true
+
+      - name: Install crane
+        run: |
+          set -euo pipefail
+          CRANE_VERSION="v0.20.2"
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz" \
+            | tar xz -C "$HOME/.local/bin" crane
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/crane" version
+
+      - name: Build and push Crossplane package
+        env:
+          REGISTRY: harbor.dittmanfamily.com
+          REPO: holybitsllc/provider-azuread
+        run: |
+          set -euo pipefail
+
+          # Determine version (same logic as Kaniko step)
+          SHORT_SHA="${GITHUB_SHA::12}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="sha-${SHORT_SHA}"
+          fi
+
+          IMAGE="${REGISTRY}/${REPO}:${VERSION}"
+          echo "Packaging runtime image ${IMAGE} as Crossplane package"
+
+          # Pull the runtime image from Harbor as an OCI tarball
+          crane pull "${IMAGE}" /tmp/runtime.tar
+
+          # Build the Crossplane xpkg package — embeds runtime image,
+          # package.yaml, and CRDs into a proper OCI image with Crossplane
+          # annotations that the package manager can extract.
+          go run github.com/crossplane/crossplane/cmd/crank@v2.2.0 xpkg build \
+            --package-root=. \
+            --embed-runtime-image-tarball=/tmp/runtime.tar \
+            --package-file=/tmp/provider.xpkg
+
+          # Push the complete package back to Harbor, replacing the
+          # runtime-only image.  Crossplane will now find package.yaml
+          # metadata and establish CRDs automatically.
+          crane push /tmp/provider.xpkg "${IMAGE}"
+          echo "Pushed Crossplane package to ${IMAGE}"
+
+          # Also update the latest tag
+          crane push /tmp/provider.xpkg "${REGISTRY}/${REPO}:latest"
+          echo "Pushed Crossplane package to ${REGISTRY}/${REPO}:latest"
