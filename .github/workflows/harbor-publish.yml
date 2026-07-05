@@ -54,44 +54,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install kubectl
-        run: |
-          set -euo pipefail
-          if command -v kubectl >/dev/null 2>&1; then
-            kubectl version --client
-            exit 0
-          fi
-          KUBECTL_VERSION="v1.31.2"
-          ARCH="$(uname -m)"
-          case "$ARCH" in
-            aarch64|arm64) ARCH="arm64" ;;
-            x86_64|amd64)  ARCH="amd64" ;;
-          esac
-          mkdir -p "$HOME/.local/bin"
-          curl -fsSL -o "$HOME/.local/bin/kubectl" \
-            "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl"
-          chmod +x "$HOME/.local/bin/kubectl"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          "$HOME/.local/bin/kubectl" version --client
+      - name: Download provider binary
+        uses: actions/download-artifact@v4
+        with:
+          name: provider-binary
+          path: _output/bin/
 
-      - name: Verify in-cluster Harbor push secret
-        run: |
-          set -euo pipefail
-          KANIKO_NAMESPACE=github-actions-runners
-          kubectl -n "$KANIKO_NAMESPACE" get secret harbor-push-secret || {
-            echo "ERROR: harbor-push-secret not found in $KANIKO_NAMESPACE namespace."
-            exit 1
-          }
-
-      - name: Push to Harbor via Kaniko Job
+      - name: Build and push runtime image with Kaniko
         env:
-          KANIKO_NAMESPACE: github-actions-runners
+          REGISTRY: harbor.dittmanfamily.com
+          REPO: holybitsllc/provider-azuread
         run: |
           set -euo pipefail
 
           SHORT_SHA="${GITHUB_SHA::12}"
-          REPO_NAME="${GITHUB_REPOSITORY##*/}"
-
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ inputs.version }}"
           elif [ "${{ github.ref_type }}" = "tag" ]; then
@@ -100,149 +76,32 @@ jobs:
             VERSION="sha-${SHORT_SHA}"
           fi
 
-          SANITIZED_VERSION="$(echo "$VERSION" | tr '/' '-' | tr '.' '-')"
-          job_name="kaniko-azuread-${SANITIZED_VERSION}-${SHORT_SHA}"
+          IMAGE="${REGISTRY}/${REPO}:${VERSION}"
 
-          cleanup() {
-            kubectl -n "$KANIKO_NAMESPACE" delete job "$job_name" --ignore-not-found=true || true
-          }
-          trap cleanup EXIT
+          # Set up Docker config auth for harbor
+          HARBOR_AUTH=$(kubectl -n github-actions-runners get secret harbor-push-secret \
+            -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d)
+          mkdir -p /tmp/docker
+          echo "$HARBOR_AUTH" > /tmp/docker/config.json
 
-          echo "Publishing version: $VERSION"
+          echo "Building ${IMAGE} with Kaniko"
 
-          cat <<EOF | kubectl -n "$KANIKO_NAMESPACE" apply -f -
-          apiVersion: batch/v1
-          kind: Job
-          metadata:
-            name: ${job_name}
-            annotations:
-              argocd.argoproj.io/compare-options: IgnoreExtraneous
-            labels:
-              app.kubernetes.io/name: kaniko-build
-              app.kubernetes.io/instance: ${REPO_NAME}
-          spec:
-            backoffLimit: 0
-            ttlSecondsAfterFinished: 120
-            template:
-              spec:
-                restartPolicy: Never
-                serviceAccountName: github-actions-runner-shared
-                containers:
-                  - name: kaniko
-                    image: gcr.io/kaniko-project/executor:v1.23.2
-                    securityContext:
-                      allowPrivilegeEscalation: false
-                    resources:
-                      requests:
-                        cpu: 500m
-                        memory: 2Gi
-                      limits:
-                        cpu: "4"
-                        memory: 16Gi
-                    args:
-                      - --context=dir:///workspace/src
-                      - --dockerfile=/workspace/src/cluster/images/provider-azuread/Dockerfile.kaniko
-                      - --destination=harbor.dittmanfamily.com/holybitsllc/provider-azuread:${VERSION}
-                      - --destination=harbor.dittmanfamily.com/holybitsllc/provider-azuread:latest
-                      - --cache=true
-                      - --cache-repo=harbor.dittmanfamily.com/holybitsllc/kaniko-cache/${REPO_NAME}
-                      - --cache-ttl=336h
-                      - --snapshot-mode=time
-                    volumeMounts:
-                      - name: workspace
-                        mountPath: /workspace
-                      - name: gomodcache
-                        mountPath: /go/pkg/mod
-                      - name: docker-config
-                        mountPath: /kaniko/.docker
-                        readOnly: true
-                initContainers:
-                  - name: clone-repo
-                    image: docker.io/alpine/git:2.47.2
-                    securityContext:
-                      allowPrivilegeEscalation: false
-                    resources:
-                      requests:
-                        cpu: 100m
-                        memory: 128Mi
-                      limits:
-                        cpu: 500m
-                        memory: 512Mi
-                    command: ["sh", "-lc"]
-                    args:
-                      - |
-                        set -euo pipefail
-                        git clone --depth=1 "https://github.com/${GITHUB_REPOSITORY}.git" /workspace/src
-                        cd /workspace/src
-                        git fetch --depth=1 origin "${GITHUB_SHA}"
-                        git checkout "${GITHUB_SHA}"
-                        mkdir -p bin/linux_amd64
-                    volumeMounts:
-                      - name: workspace
-                        mountPath: /workspace
-                  - name: go-build
-                    image: golang:1.25.11-alpine
-                    securityContext:
-                      allowPrivilegeEscalation: false
-                    resources:
-                      requests:
-                        cpu: 1000m
-                        memory: 2Gi
-                      limits:
-                        cpu: "4"
-                        memory: 8Gi
-                    command: ["sh", "-lc"]
-                    args:
-                      - |
-                        set -euo pipefail
-                        apk --no-cache add git
-                        cd /workspace/src
-                        CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-                          go build -o bin/linux_amd64/provider ./cmd/provider/
-                        echo "Binary built: $(ls -lh bin/linux_amd64/provider)"
-                    volumeMounts:
-                      - name: workspace
-                        mountPath: /workspace
-                      - name: gomodcache
-                        mountPath: /go/pkg/mod
-                volumes:
-                  - name: workspace
-                    emptyDir: {}
-                  - name: gomodcache
-                    emptyDir: {}
-                  - name: docker-config
-                    secret:
-                      secretName: harbor-push-secret
-                      items:
-                        - key: .dockerconfigjson
-                          path: config.json
-          EOF
+          docker run --rm \
+            -v "$(pwd):/workspace" \
+            -v /tmp/docker:/kaniko/.docker \
+            gcr.io/kaniko-project/executor:v1.23.2 \
+            --context=dir:///workspace \
+            --dockerfile=/workspace/cluster/images/provider-azuread/Dockerfile.kaniko \
+            --destination="${IMAGE}" \
+            --destination="${REGISTRY}/${REPO}:latest" \
+            --cache=true \
+            --cache-repo="${REGISTRY}/holybitsllc/kaniko-cache/${GITHUB_REPOSITORY##*/}" \
+            --cache-ttl=336h \
+            --snapshot-mode=time
 
-          deadline=$((SECONDS + 3600))
-          while true; do
-            if kubectl -n "$KANIKO_NAMESPACE" wait --for=condition=complete --timeout=5s "job/${job_name}"; then
-              break
-            fi
+          echo "Runtime image pushed: ${IMAGE}"
 
-            failed_count="$(kubectl -n "$KANIKO_NAMESPACE" get job "$job_name" -o jsonpath='{.status.failed}' 2>/dev/null || echo 0)"
-            if [ "${failed_count:-0}" != "0" ]; then
-              echo "::error::Kaniko job failed. Dumping logs."
-              kubectl -n "$KANIKO_NAMESPACE" logs "job/${job_name}" --all-containers=true || true
-              exit 1
-            fi
-
-            if [ "$SECONDS" -ge "$deadline" ]; then
-              echo "::error::Kaniko job exceeded 60m timeout. Dumping logs."
-              kubectl -n "$KANIKO_NAMESPACE" logs "job/${job_name}" --all-containers=true || true
-              exit 1
-            fi
-
-            sleep 10
-          done
-
-          kubectl -n "$KANIKO_NAMESPACE" logs "job/${job_name}" --all-containers=true
-
-      - name: Install crane and crossplane CLI
+      - name: Install crane and Crossplane CLI
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.local/bin"
@@ -265,7 +124,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Determine version (same logic as Kaniko step)
           SHORT_SHA="${GITHUB_SHA::12}"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ inputs.version }}"
@@ -290,8 +148,7 @@ jobs:
             --package-file=/tmp/provider.xpkg
 
           # Push the complete package back to Harbor, replacing the
-          # runtime-only image.  Crossplane will now find package.yaml
-          # metadata and establish CRDs automatically.
+          # runtime-only image.
           crane push /tmp/provider.xpkg "${IMAGE}"
           echo "Pushed Crossplane package to ${IMAGE}"
 
