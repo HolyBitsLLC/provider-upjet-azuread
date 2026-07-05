@@ -60,7 +60,16 @@ jobs:
           name: provider-binary
           path: bin/
 
-      - name: Install kubectl
+      - name: Install Kaniko
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o "$HOME/.local/bin/executor" \
+            "https://github.com/GoogleContainerTools/kaniko/releases/download/v1.23.2/executor-linux-amd64"
+          chmod +x "$HOME/.local/bin/executor"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install kubectl (for Harbor auth)
         run: |
           set -euo pipefail
           KUBECTL_VERSION="v1.31.2"
@@ -75,7 +84,7 @@ jobs:
           chmod +x "$HOME/.local/bin/kubectl"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Build and push runtime image with Kaniko
+      - name: Build and push runtime image
         env:
           REGISTRY: harbor.dittmanfamily.com
           REPO: holybitsllc/provider-azuread
@@ -93,20 +102,16 @@ jobs:
 
           IMAGE="${REGISTRY}/${REPO}:${VERSION}"
 
-          # Set up Docker config auth for harbor
-          HARBOR_AUTH=$(kubectl -n github-actions-runners get secret harbor-push-secret \
-            -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d)
-          mkdir -p /tmp/docker
-          echo "$HARBOR_AUTH" > /tmp/docker/config.json
+          # Auth for Harbor
+          kubectl -n github-actions-runners get secret harbor-push-secret \
+            -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d > /tmp/docker-config.json
+          export DOCKER_CONFIG=/tmp
 
           echo "Building ${IMAGE} with Kaniko"
 
-          docker run --rm \
-            -v "$(pwd):/workspace" \
-            -v /tmp/docker:/kaniko/.docker \
-            gcr.io/kaniko-project/executor:v1.23.2 \
-            --context=dir:///workspace \
-            --dockerfile=/workspace/cluster/images/provider-azuread/Dockerfile.kaniko \
+          executor \
+            --context=dir://"$(pwd)" \
+            --dockerfile="$(pwd)/cluster/images/provider-azuread/Dockerfile.kaniko" \
             --destination="${IMAGE}" \
             --destination="${REGISTRY}/${REPO}:latest" \
             --cache=true \
@@ -121,12 +126,10 @@ jobs:
           set -euo pipefail
           mkdir -p "$HOME/.local/bin"
 
-          CRANE_VERSION="v0.20.2"
-          curl -fsSL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz" \
+          curl -fsSL "https://github.com/google/go-containerregistry/releases/download/v0.20.2/go-containerregistry_Linux_x86_64.tar.gz" \
             | tar xz -C "$HOME/.local/bin" crane
 
-          CROSSPLANE_VERSION="v2.2.0"
-          curl -fsSL "https://releases.crossplane.io/stable/${CROSSPLANE_VERSION}/bin/linux_amd64/crank" \
+          curl -fsSL "https://releases.crossplane.io/stable/v2.2.0/bin/linux_amd64/crank" \
             -o "$HOME/.local/bin/crank"
           chmod +x "$HOME/.local/bin/crank"
 
@@ -151,22 +154,15 @@ jobs:
           IMAGE="${REGISTRY}/${REPO}:${VERSION}"
           echo "Packaging runtime image ${IMAGE} as Crossplane package"
 
-          # Pull the runtime image from Harbor as an OCI tarball
           crane pull "${IMAGE}" /tmp/runtime.tar
 
-          # Build the Crossplane xpkg package — embeds runtime image,
-          # package.yaml, and CRDs into a proper OCI image with Crossplane
-          # annotations that the package manager can extract.
           crank xpkg build \
             --package-root=. \
             --embed-runtime-image-tarball=/tmp/runtime.tar \
             --package-file=/tmp/provider.xpkg
 
-          # Push the complete package back to Harbor, replacing the
-          # runtime-only image.
           crane push /tmp/provider.xpkg "${IMAGE}"
           echo "Pushed Crossplane package to ${IMAGE}"
 
-          # Also update the latest tag
           crane push /tmp/provider.xpkg "${REGISTRY}/${REPO}:latest"
           echo "Pushed Crossplane package to ${REGISTRY}/${REPO}:latest"
