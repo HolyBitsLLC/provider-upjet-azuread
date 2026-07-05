@@ -27,7 +27,8 @@ img.build.shared:
 	@docker buildx build $(BUILD_ARGS) \
 		--platform $(IMAGE_PLATFORMS) \
 		-t $(IMAGE) \
-		$(IMAGE_TEMP_DIR) || $(FAIL)
+		-f $(IMAGE_TEMP_DIR)/Dockerfile \
+		../../.. || $(FAIL)
 
 img.promote:
 	@$(INFO) Skipping image promotion from $(FROM_IMAGE) to $(TO_IMAGE)
