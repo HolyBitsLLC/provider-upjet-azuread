@@ -180,7 +180,15 @@ jobs:
           # Build from a staging dir with only Crossplane manifests
           PKG_TMP="/tmp/xpkg-root"
           rm -rf "$PKG_TMP" && mkdir -p "$PKG_TMP"
-          cp -r package "$PKG_TMP/"
+          cp package/crossplane.yaml "$PKG_TMP/"
+          # CRDs may be a symlink or directory, copy contents explicitly
+          cp -r package/crds "$PKG_TMP/crds" 2>/dev/null || true
+          # ensure crds dir is flat (no subdirectories)
+          find "$PKG_TMP/crds" -type d 2>/dev/null | sort -r | while read d; do
+            [ "$d" = "$PKG_TMP/crds" ] && continue
+            mv "$d"/* "$PKG_TMP/crds/" 2>/dev/null || true
+            rmdir "$d" 2>/dev/null || true
+          done
 
           crank xpkg build \
             --package-root="$PKG_TMP" \
