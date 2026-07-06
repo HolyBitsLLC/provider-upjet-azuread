@@ -142,12 +142,17 @@ jobs:
             -t "temp" \
             -o /tmp/runtime-raw.tar
 
-          # Set entrypoint so Crossplane can launch the provider binary
-          crane mutate tarball:/tmp/runtime-raw.tar \
+          # Push to Harbor as temp ref so crane mutate can pull from registry
+          TEMP_REF="${REGISTRY}/${REPO}:temp-${SHORT_SHA}"
+          crane push /tmp/runtime-raw.tar "${TEMP_REF}"
+          echo "Pushed raw image to ${TEMP_REF}"
+
+          # Mutate entrypoint on the remote image, output to local tarball
+          crane mutate "${TEMP_REF}" \
             --entrypoint="/usr/local/bin/provider" \
             -o /tmp/runtime.tar
 
-          # Push to Harbor
+          # Push final images to Harbor
           crane push /tmp/runtime.tar "${IMAGE}"
           crane push /tmp/runtime.tar "${REGISTRY}/${REPO}:latest"
 
