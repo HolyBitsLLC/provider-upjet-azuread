@@ -143,7 +143,7 @@ jobs:
             -o /tmp/runtime-raw.tar
 
           # Set entrypoint so Crossplane can launch the provider binary
-          crane mutate /tmp/runtime-raw.tar \
+          crane mutate tarball:/tmp/runtime-raw.tar \
             --entrypoint="/usr/local/bin/provider" \
             -o /tmp/runtime.tar
 
