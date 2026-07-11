@@ -28,6 +28,17 @@ jobs:
           paths_ignore: '["**.md", "**.png", "**.jpg"]'
           do_not_skip: '["workflow_dispatch", "schedule", "push"]'
 
+  check-crd-webhook:
+    runs-on: ubuntu-latest
+    needs: detect-noop
+    if: needs.detect-noop.outputs.noop != 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Check CRD conversion webhook is enabled
+        run: bash scripts/check-webhook.sh
+
   report-breaking-changes:
     runs-on: ubuntu-latest
     needs: detect-noop
