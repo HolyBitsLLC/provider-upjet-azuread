@@ -57,7 +57,6 @@ func GetNamespacedProvider(ctx context.Context, sdkProvider *schema.Provider, ge
 		ujconfig.WithSchemaTraversers(&ujconfig.SingletonListEmbedder{}),
 	)
 
-	registerTerraformConversions(pc)
 	for _, configure := range []func(provider *ujconfig.Provider){
 		// add custom config functions
 		invitations.Configure,
@@ -78,6 +77,9 @@ func GetNamespacedProvider(ctx context.Context, sdkProvider *schema.Provider, ge
 	}
 
 	pc.ConfigureResources()
+	// Must run after ConfigureResources so AddSingletonListConversion
+	// calls for nested paths have been registered on the resources.
+	registerTerraformConversions(pc)
 	return pc, nil
 }
 
