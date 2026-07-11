@@ -24,3 +24,6 @@ metadata:
 spec:
   capabilities:
   - SafeStart
+crossplane:
+  webhook:
+    conversion: true

@@ -119,7 +119,6 @@ func GetProvider(ctx context.Context, sdkProvider *schema.Provider, generationPr
 		ujconfig.WithSchemaTraversers(&ujconfig.SingletonListEmbedder{}),
 	)
 
-	bumpVersionsWithEmbeddedLists(pc)
 	for _, configure := range []func(provider *ujconfig.Provider){
 		// add custom config functions
 		invitations.Configure,
@@ -140,6 +139,9 @@ func GetProvider(ctx context.Context, sdkProvider *schema.Provider, generationPr
 	}
 
 	pc.ConfigureResources()
+	// Must run after ConfigureResources so AddSingletonListConversion
+	// calls for nested paths have been registered on the resources.
+	bumpVersionsWithEmbeddedLists(pc)
 	return pc, nil
 }
 
