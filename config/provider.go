@@ -164,6 +164,14 @@ func bumpVersionsWithEmbeddedLists(pc *ujconfig.Provider) {
 	for _, n := range l {
 		oldSLAPIs[n] = struct{}{}
 	}
+	// Resources whose v1beta1/v1beta2 singleton-list type mismatch
+	// breaks Kubernetes Server-Side Apply (SSA). These resources
+	// still get v1beta2 as storage but skip the singleton-list
+	// conversion — both versions use embedded-object types and the
+	// conversion webhook runs identity conversion only.
+	ssaSafeIdentityOnly := map[string]struct{}{
+		"azuread_application": {},
+	}
 
 	for name, r := range pc.Resources {
 		r := r
@@ -181,10 +189,16 @@ func bumpVersionsWithEmbeddedLists(pc *ujconfig.Provider) {
 			// because the controller reconciles on the API version with the singleton list API,
 			// no need for a Terraform conversion.
 			r.ControllerReconcileVersion = r.Version //nolint:staticcheck
-			r.Conversions = []conversion.Conversion{
-				conversion.NewIdentityConversionExpandPaths(conversion.AllVersions, conversion.AllVersions, conversion.DefaultPathPrefixes(), r.CRDListConversionPaths()...),
-				conversion.NewSingletonListConversion("v1beta1", "v1beta2", conversion.DefaultPathPrefixes(), r.CRDListConversionPaths(), conversion.ToEmbeddedObject),
-				conversion.NewSingletonListConversion("v1beta2", "v1beta1", conversion.DefaultPathPrefixes(), r.CRDListConversionPaths(), conversion.ToSingletonList)}
+			if _, skip := ssaSafeIdentityOnly[name]; skip {
+				r.Conversions = []conversion.Conversion{
+					conversion.NewIdentityConversionExpandPaths(conversion.AllVersions, conversion.AllVersions, conversion.DefaultPathPrefixes(), r.CRDListConversionPaths()...),
+				}
+			} else {
+				r.Conversions = []conversion.Conversion{
+					conversion.NewIdentityConversionExpandPaths(conversion.AllVersions, conversion.AllVersions, conversion.DefaultPathPrefixes(), r.CRDListConversionPaths()...),
+					conversion.NewSingletonListConversion("v1beta1", "v1beta2", conversion.DefaultPathPrefixes(), r.CRDListConversionPaths(), conversion.ToEmbeddedObject),
+					conversion.NewSingletonListConversion("v1beta2", "v1beta1", conversion.DefaultPathPrefixes(), r.CRDListConversionPaths(), conversion.ToSingletonList)}
+			}
 			if err := r.SetDeprecatedVersion("v1beta1",
 				ujconfig.VersionDeprecation{
 					Warning:            "This API version is deprecated.",
