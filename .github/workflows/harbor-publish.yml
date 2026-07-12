@@ -200,6 +200,34 @@ jobs:
             rmdir "$d" 2>/dev/null || true
           done
 
+          # Inject conversion webhook into CRDs so Crossplane's APIEstablisher
+          # can fill in the CA bundle and service reference at deployment time.
+          # Without this, CRDs ship with strategy: None and the singleton-list
+          # conversion webhook never activates.
+          python3 -c '
+import yaml, pathlib
+webhook = {
+    "strategy": "Webhook",
+    "webhook": {
+        "clientConfig": {"service": {"name": "", "namespace": "", "path": "/convert"}},
+        "conversionReviewVersions": ["v1"],
+    },
+}
+crd_dir = pathlib.Path("/tmp/xpkg-root/crds")
+for f in sorted(crd_dir.glob("*.yaml")):
+    try:
+        doc = yaml.safe_load(f.read_text())
+        if doc is None or doc.get("kind") != "CustomResourceDefinition":
+            continue
+        spec = doc.setdefault("spec", {})
+        spec["conversion"] = webhook
+        f.write_text(yaml.dump(doc, default_flow_style=False, sort_keys=False))
+        print(f"  webhook → {f.name}")
+    except Exception as e:
+        print(f"  SKIP {f.name}: {e}")
+'
+          echo "CRD conversion webhooks injected"
+
           crank xpkg build \
             --package-root="$PKG_TMP" \
             --embed-runtime-image-tarball=/tmp/runtime.tar \
