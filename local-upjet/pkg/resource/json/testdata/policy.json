@@ -1,0 +1,11 @@
+{
+  "Rules": [
+    {
+      "ResourceType": "collection",
+      "Resource": [
+        "collection/example-collection-2"
+      ]
+    }
+  ],
+  "AWSOwnedKey": true
+}

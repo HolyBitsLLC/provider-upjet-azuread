@@ -1,0 +1,195 @@
+# SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+#
+# SPDX-License-Identifier: CC0-1.0
+
+version: "2"
+output:
+  formats:
+    text:
+      path: stdout
+      print-linter-name: true
+linters:
+  enable:
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - contextcheck
+    - durationcheck
+    - errchkjson
+    - errorlint
+    - exhaustive
+    - gocheckcompilerdirectives
+    - gochecksumtype
+    - goconst
+    - gocritic
+    - gocyclo
+    - gosec
+    - gosmopolitan
+    - loggercheck
+    - makezero
+    - misspell
+    - musttag
+    - nakedret
+    - nilerr
+    - nilnesserr
+    - noctx
+    - nolintlint
+    - prealloc
+    - protogetter
+    - reassign
+    - recvcheck
+    - revive
+    - rowserrcheck
+    - spancheck
+    - sqlclosecheck
+    - testifylint
+    - unconvert
+    - unparam
+    - zerologlint
+  settings:
+    dupl:
+      threshold: 100
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+      exclude-functions:
+        - io/ioutil.ReadFile
+        - io/ioutil.ReadDir
+        - io/ioutil.ReadAll
+    goconst:
+      min-len: 3
+      min-occurrences: 5
+    gocritic:
+      enabled-tags:
+        - performance
+      settings:
+        captLocal:
+          paramsOnly: true
+        rangeValCopy:
+          sizeThreshold: 32
+    gocyclo:
+      min-complexity: 10
+    lll:
+      tab-width: 1
+    nakedret:
+      max-func-lines: 30
+    nolintlint:
+      require-explanation: false
+      require-specific: true
+    prealloc:
+      simple: true
+      range-loops: true
+      for-loops: false
+    revive:
+      confidence: 0.8
+    unparam:
+      check-exported: false
+  exclusions:
+    generated: lax
+    rules:
+      # Exclude some linters from running on tests files.
+      - linters:
+          - dupl
+          - errcheck
+          - gocyclo
+          - gosec
+          - scopelint
+          - unparam
+        path: _test(ing)?\.go
+
+      # Ease some gocritic warnings on test files.
+      - linters:
+          - gocritic
+        path: _test\.go
+        text: (unnamedResult|exitAfterDefer)
+
+      # These are performance optimisations rather than style issues per se.
+      # They warn when function arguments or range values copy a lot of memory
+      # rather than using a pointer.
+      - linters:
+          - gocritic
+        text: '(hugeParam|rangeValCopy):'
+
+      # This "TestMain should call os.Exit to set exit code" warning is not clever
+      # enough to notice that we call a helper method that calls os.Exit.
+      - linters:
+          - staticcheck
+        text: 'SA3000:'
+
+      # This is a "potential hardcoded credentials" warning. It's triggered by
+      # any variable with 'secret' in the same, and thus hits a lot of false
+      # positives in Kubernetes land where a Secret is an object type.
+      - linters:
+          - gosec
+        text: 'G101:'
+
+      # This is an 'errors unhandled' warning that duplicates errcheck.
+      - linters:
+          - gosec
+        text: 'G104:'
+
+      # Some k8s dependencies do not have JSON tags on all fields in structs.
+      - linters:
+          - musttag
+        path: k8s.io/
+
+      # This exclusion is necessary because this package relies on deprecated
+      # functions and fields to maintain compatibility with older versions. This
+      # package acts as a migration framework, supporting users coming from
+      # previous versions. In the future, we may extract this package into a
+      # separate module and decouple its dependencies from upjet.
+      - linters:
+          - staticcheck
+        path: pkg/migration/
+        text: 'SA1019:'
+      - linters:
+          - staticcheck
+        text: 'QF1008:'
+      # Ease some deprecated field usage, we still handle them
+      - linters:
+          - staticcheck
+        path: pkg/types/reference.go
+        text: 'SA1019:'
+      - linters:
+          - staticcheck
+        path: pkg/types/markers/crossplane.go
+        text: 'SA1019:'
+      - linters:
+          - govet
+        text: 'buildtag:'
+        path: pkg/generate.go
+      - linters:
+          - nolintlint
+        path: pkg/controller/proposed_state.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+issues:
+  # Maximum issues count per one linter. Set to 0 to disable.
+  max-issues-per-linter: 0
+  # Maximum count of issues with the same text. Set to 0 to disable.
+  max-same-issues: 0
+  new: false
+formatters:
+  enable:
+    - gci
+    - gofmt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/crossplane/upjet)
+        - blank
+        - dot
+      custom-order: true
+    gofmt:
+      simplify: true
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

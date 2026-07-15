@@ -1,0 +1,10 @@
+{{ .Header }}
+
+{{ .GenStatement }}
+
+package {{ .APIVersion }}
+
+{{ range .Resources }}
+    // Hub marks this type as a conversion hub.
+    func (tr *{{ .CRD.Kind }}) Hub() {}
+{{ end }}

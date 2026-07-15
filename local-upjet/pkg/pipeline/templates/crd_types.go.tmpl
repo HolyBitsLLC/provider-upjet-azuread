@@ -1,0 +1,89 @@
+{{ .Header }}
+
+{{ .GenStatement }}
+
+package {{ .CRD.APIVersion }}
+
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	{{ .Imports }}
+)
+
+{{ .Types }}
+
+// {{ .CRD.Kind }}Spec defines the desired state of {{ .CRD.Kind }}
+type {{ .CRD.Kind }}Spec struct {
+  {{- if (eq .CRD.Scope "Namespaced") }}
+	{{ .XPV2CommonAPIsPackageAlias }}ManagedResourceSpec `json:",inline"`
+  {{- else }}
+	{{ .XPCommonAPIsPackageAlias }}ResourceSpec `json:",inline"`
+  {{- end }}
+	ForProvider       {{ .CRD.ForProviderType }} `json:"forProvider"`
+	// THIS IS A BETA FIELD. It will be honored
+	// unless the Management Policies feature flag is disabled.
+	// InitProvider holds the same fields as ForProvider, with the exception
+	// of Identifier and other resource reference fields. The fields that are
+	// in InitProvider are merged into ForProvider when the resource is created.
+	// The same fields are also added to the terraform ignore_changes hook, to
+	// avoid updating them after creation. This is useful for fields that are
+	// required on creation, but we do not desire to update them after creation,
+	// for example because of an external controller is managing them, like an
+	// autoscaler.
+	InitProvider       {{ .CRD.InitProviderType }} `json:"initProvider,omitempty"`
+}
+
+// {{ .CRD.Kind }}Status defines the observed state of {{ .CRD.Kind }}.
+type {{ .CRD.Kind }}Status struct {
+	{{ .XPCommonAPIsPackageAlias }}ResourceStatus `json:",inline"`
+	AtProvider          {{ .CRD.AtProviderType }} `json:"atProvider,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+{{ if eq .CRD.MarkStorageVersion "true" -}}
+// +kubebuilder:storageversion
+{{ end }}
+{{- if eq .CRD.MarkUnserved "true" }}
+// +kubebuilder:unservedversion
+{{ end }}
+{{- if .CRD.DeprecationWarning }}
+// +kubebuilder:deprecatedversion:warning="{{ .CRD.DeprecationWarning }}"
+{{ end }}
+
+// {{ .CRD.Kind }} is the Schema for the {{ .CRD.Kind }}s API. {{ .CRD.Description }}
+{{- if .CRD.DeprecationNotice }}{{ .CRD.DeprecationNotice }}{{ end }}
+// +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
+// +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
+// +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
+// +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:resource:scope={{ .CRD.Scope }},categories={crossplane,managed,{{ .Provider.ShortName }}}{{ if .CRD.Path }},path={{ .CRD.Path }}{{ end }}
+type {{ .CRD.Kind }} struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	{{- .CRD.ValidationRules }}
+	Spec              {{ .CRD.Kind }}Spec   `json:"spec"`
+	Status            {{ .CRD.Kind }}Status `json:"status,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+
+// {{ .CRD.Kind }}List contains a list of {{ .CRD.Kind }}s
+type {{ .CRD.Kind }}List struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []{{ .CRD.Kind }} `json:"items"`
+}
+
+// Repository type metadata.
+var (
+	{{ .CRD.Kind }}_Kind             = "{{ .CRD.Kind }}"
+	{{ .CRD.Kind }}_GroupKind        = schema.GroupKind{Group: CRDGroup, Kind: {{ .CRD.Kind }}_Kind}.String()
+	{{ .CRD.Kind }}_KindAPIVersion   = {{ .CRD.Kind }}_Kind + "." + CRDGroupVersion.String()
+	{{ .CRD.Kind }}_GroupVersionKind = CRDGroupVersion.WithKind({{ .CRD.Kind }}_Kind)
+)
+
+func init() {
+	SchemeBuilder.Register(&{{ .CRD.Kind }}{}, &{{ .CRD.Kind }}List{})
+}
