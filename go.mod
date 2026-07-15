@@ -185,5 +185,3 @@ require (
 )
 
 replace github.com/hashicorp/terraform-provider-azuread => github.com/upbound/terraform-provider-azuread v0.0.0-20260316080806-a4604dc8618a
-
-replace github.com/crossplane/upjet/v2 => ./local-upjet
