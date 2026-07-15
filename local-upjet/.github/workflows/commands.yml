@@ -1,0 +1,95 @@
+# SPDX-FileCopyrightText: 2023 The Crossplane Authors <https://crossplane.io>
+#
+# SPDX-License-Identifier: CC0-1.0
+
+name: Comment Commands
+
+on: issue_comment
+
+jobs:
+  points:
+    runs-on: ubuntu-24.04
+    if: startsWith(github.event.comment.body, '/points')
+
+    steps:
+      - name: Extract Command
+        id: command
+        uses: xt0rted/slash-command-action@bf51f8f5f4ea3d58abc7eca58f77104182b23e88 # v2.0.0
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          command: points
+          reaction: "true"
+          reaction-type: "eyes"
+          allow-edits: "false"
+          permission-level: write
+      - name: Handle Command
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          POINTS: ${{ steps.command.outputs.command-arguments }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const points = process.env.POINTS
+
+            if (isNaN(parseInt(points))) {
+              console.log("Malformed command - expected '/points <int>'")
+              github.reactions.createForIssueComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: context.payload.comment.id,
+                content: "confused"
+              })
+              return
+            }
+            const label = "points/" + points
+
+            // Delete our needs-points-label label.
+            try {
+              await github.issues.deleteLabel({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: ['needs-points-label']
+              })
+              console.log("Deleted 'needs-points-label' label.")
+            }
+            catch(e) {
+              console.log("Label 'needs-points-label' probably didn't exist.")
+            }
+
+            // Add our points label.
+            github.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: [label]
+            })
+            console.log("Added '" + label + "' label.")
+
+  # NOTE(negz): See also backport.yml, which is the variant that triggers on PR
+  # merge rather than on comment.
+  backport:
+    runs-on: ubuntu-latest
+    if: github.event.issue.pull_request && startsWith(github.event.comment.body, '/backport')
+    steps:
+      - name: Extract Command
+        id: command
+        uses: xt0rted/slash-command-action@bf51f8f5f4ea3d58abc7eca58f77104182b23e88 # v2.0.0
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          command: backport
+          reaction: "true"
+          reaction-type: "eyes"
+          allow-edits: "false"
+          permission-level: write
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Open Backport PR
+        uses: zeebe-io/backport-action@66065406958f46e82238fd59546f5a99e69e22aa # v4.5.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_workspace: ${{ github.workspace }}
