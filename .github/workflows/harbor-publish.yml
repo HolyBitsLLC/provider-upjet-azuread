@@ -200,6 +200,9 @@ jobs:
             rmdir "$d" 2>/dev/null || true
           done
 
+          # Ensure PyYAML is available for the inject-webhook script
+          pip3 install --quiet PyYAML 2>/dev/null || pip install --quiet PyYAML
+
           # Inject conversion webhook into CRDs so Crossplane's APIEstablisher
           # can fill in the CA bundle and service reference at deployment time.
           python3 scripts/inject-webhook.py "$PKG_TMP/crds"
