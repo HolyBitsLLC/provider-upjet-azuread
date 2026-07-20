@@ -67,6 +67,23 @@ func (mg *Member) ResolveReferences(ctx context.Context, c client.Reader) error 
 	var err error
 
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.GroupMemberObjectID),
+		Extract:      resource.ExtractParamPath("object_id", true),
+		Namespace:    mg.GetNamespace(),
+		Reference:    mg.Spec.ForProvider.GroupMemberObjectIDRef,
+		Selector:     mg.Spec.ForProvider.GroupMemberObjectIDSelector,
+		To: reference.To{
+			List:    &v1beta2.GroupList{},
+			Managed: &v1beta2.Group{},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "mg.Spec.ForProvider.GroupMemberObjectID")
+	}
+	mg.Spec.ForProvider.GroupMemberObjectID = reference.ToPtrValue(rsp.ResolvedValue)
+	mg.Spec.ForProvider.GroupMemberObjectIDRef = rsp.ResolvedReference
+
+	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.GroupObjectID),
 		Extract:      resource.ExtractParamPath("object_id", true),
 		Namespace:    mg.GetNamespace(),
@@ -99,6 +116,23 @@ func (mg *Member) ResolveReferences(ctx context.Context, c client.Reader) error 
 	}
 	mg.Spec.ForProvider.MemberObjectID = reference.ToPtrValue(rsp.ResolvedValue)
 	mg.Spec.ForProvider.MemberObjectIDRef = rsp.ResolvedReference
+
+	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+		CurrentValue: reference.FromPtrValue(mg.Spec.InitProvider.GroupMemberObjectID),
+		Extract:      resource.ExtractParamPath("object_id", true),
+		Namespace:    mg.GetNamespace(),
+		Reference:    mg.Spec.InitProvider.GroupMemberObjectIDRef,
+		Selector:     mg.Spec.InitProvider.GroupMemberObjectIDSelector,
+		To: reference.To{
+			List:    &v1beta2.GroupList{},
+			Managed: &v1beta2.Group{},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "mg.Spec.InitProvider.GroupMemberObjectID")
+	}
+	mg.Spec.InitProvider.GroupMemberObjectID = reference.ToPtrValue(rsp.ResolvedValue)
+	mg.Spec.InitProvider.GroupMemberObjectIDRef = rsp.ResolvedReference
 
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.InitProvider.GroupObjectID),

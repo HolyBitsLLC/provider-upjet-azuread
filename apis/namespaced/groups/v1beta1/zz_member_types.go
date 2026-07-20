@@ -16,6 +16,20 @@ import (
 
 type MemberInitParameters struct {
 
+	// The object ID of the principal you want to add as a member to the group. Supported object types are Users, Groups or Service Principals. Changing this forces a new resource to be created.
+	// The object ID of the principal you want to add as a member to the group. Supported object types are Users, Groups or Service Principals
+	// +crossplane:generate:reference:type=github.com/upbound/provider-azuread/v2/apis/namespaced/groups/v1beta1.Group
+	// +crossplane:generate:reference:extractor=github.com/crossplane/upjet/v2/pkg/resource.ExtractParamPath("object_id",true)
+	GroupMemberObjectID *string `json:"groupMemberObjectId,omitempty" tf:"group_member_object_id,omitempty"`
+
+	// Reference to a Group in groups to populate groupMemberObjectId.
+	// +kubebuilder:validation:Optional
+	GroupMemberObjectIDRef *v1.NamespacedReference `json:"groupMemberObjectIdRef,omitempty" tf:"-"`
+
+	// Selector for a Group in groups to populate groupMemberObjectId.
+	// +kubebuilder:validation:Optional
+	GroupMemberObjectIDSelector *v1.NamespacedSelector `json:"groupMemberObjectIdSelector,omitempty" tf:"-"`
+
 	// The object ID of the group you want to add the member to. Changing this forces a new resource to be created.
 	// The object ID of the group you want to add the member to
 	// +crossplane:generate:reference:type=github.com/upbound/provider-azuread/v2/apis/namespaced/groups/v1beta1.Group
@@ -47,6 +61,10 @@ type MemberInitParameters struct {
 
 type MemberObservation struct {
 
+	// The object ID of the principal you want to add as a member to the group. Supported object types are Users, Groups or Service Principals. Changing this forces a new resource to be created.
+	// The object ID of the principal you want to add as a member to the group. Supported object types are Users, Groups or Service Principals
+	GroupMemberObjectID *string `json:"groupMemberObjectId,omitempty" tf:"group_member_object_id,omitempty"`
+
 	// The object ID of the group you want to add the member to. Changing this forces a new resource to be created.
 	// The object ID of the group you want to add the member to
 	GroupObjectID *string `json:"groupObjectId,omitempty" tf:"group_object_id,omitempty"`
@@ -59,6 +77,21 @@ type MemberObservation struct {
 }
 
 type MemberParameters struct {
+
+	// The object ID of the principal you want to add as a member to the group. Supported object types are Users, Groups or Service Principals. Changing this forces a new resource to be created.
+	// The object ID of the principal you want to add as a member to the group. Supported object types are Users, Groups or Service Principals
+	// +crossplane:generate:reference:type=github.com/upbound/provider-azuread/v2/apis/namespaced/groups/v1beta1.Group
+	// +crossplane:generate:reference:extractor=github.com/crossplane/upjet/v2/pkg/resource.ExtractParamPath("object_id",true)
+	// +kubebuilder:validation:Optional
+	GroupMemberObjectID *string `json:"groupMemberObjectId,omitempty" tf:"group_member_object_id,omitempty"`
+
+	// Reference to a Group in groups to populate groupMemberObjectId.
+	// +kubebuilder:validation:Optional
+	GroupMemberObjectIDRef *v1.NamespacedReference `json:"groupMemberObjectIdRef,omitempty" tf:"-"`
+
+	// Selector for a Group in groups to populate groupMemberObjectId.
+	// +kubebuilder:validation:Optional
+	GroupMemberObjectIDSelector *v1.NamespacedSelector `json:"groupMemberObjectIdSelector,omitempty" tf:"-"`
 
 	// The object ID of the group you want to add the member to. Changing this forces a new resource to be created.
 	// The object ID of the group you want to add the member to

@@ -241,22 +241,29 @@ func main() {
 		namespacedOpts.ChangeLogOptions = &clo
 	}
 
-	canSafeStart, err := canWatchCRD(ctx, mgr)
-	kingpin.FatalIfError(err, "SafeStart precheck failed")
-	if canSafeStart {
-		crdGate := new(gate.Gate[schema.GroupVersionKind])
-		clusterOpts.Gate = crdGate
-		namespacedOpts.Gate = crdGate
-		kingpin.FatalIfError(customresourcesgate.Setup(mgr, namespacedOpts.Options), "Cannot setup CRD gate")
-		kingpin.FatalIfError(clustercontroller.SetupGated(mgr, clusterOpts), "Cannot setup cluster-scoped AzureAD controllers")
-		kingpin.FatalIfError(namespacedcontroller.SetupGated(mgr, namespacedOpts), "Cannot setup namespaced AzureAD controllers")
-	} else {
-		logr.Info("Provider has missing RBAC permissions for watching CRDs, controller SafeStart capability will be disabled")
-		kingpin.FatalIfError(clustercontroller.Setup(mgr, clusterOpts), "Cannot setup cluster-scoped AzureAD controllers")
-		kingpin.FatalIfError(namespacedcontroller.Setup(mgr, namespacedOpts), "Cannot setup namespaced AzureAD controllers")
-	}
+	setupControllers(ctx, mgr, logr, &clusterOpts, &namespacedOpts)
+
 	kingpin.FatalIfError(conversion.RegisterConversions(clusterOpts.Provider, namespacedOpts.Provider, mgr.GetScheme()), "Cannot initialize the webhook conversion registry")
 	kingpin.FatalIfError(mgr.Start(ctrl.SetupSignalHandler()), "Cannot start controller manager")
+}
+
+// setupControllers configures CRD-gated managed resource controllers.
+// Controllers are deferred until their CRD appears on the cluster, preventing
+// a chicken-and-egg deadlock when CRDs don't exist yet at startup.
+func setupControllers(ctx context.Context, mgr ctrl.Manager, logr logging.Logger, clusterOpts *tjcontroller.Options, namespacedOpts *tjcontroller.Options) {
+	crdGate := new(gate.Gate[schema.GroupVersionKind])
+	clusterOpts.Gate = crdGate
+	namespacedOpts.Gate = crdGate
+
+	_ = customresourcesgate.Setup(mgr, namespacedOpts.Options) // best-effort; CRD watch may not work without RBAC
+	if canWatch, err := canWatchCRD(ctx, mgr); err == nil && canWatch {
+		logr.Info("Provider has RBAC to watch CRDs; controllers will activate dynamically")
+	} else {
+		logr.Info("Provider cannot watch CRDs (RBAC may be missing); controllers dormant until restart.  Serving webhooks and health probes only.")
+	}
+
+	kingpin.FatalIfError(clustercontroller.SetupGated(mgr, *clusterOpts), "Cannot setup cluster-scoped AzureAD controllers")
+	kingpin.FatalIfError(namespacedcontroller.SetupGated(mgr, *namespacedOpts), "Cannot setup namespaced AzureAD controllers")
 }
 
 func canWatchCRD(ctx context.Context, mgr manager.Manager) (bool, error) {
