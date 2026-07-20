@@ -133,7 +133,7 @@ func TestPwdConnectionDetails(t *testing.T) {
 		{
 			name: "extra keys are ignored, only value matters",
 			attr: map[string]any{
-				valueKey:        "secret123",
+				valueKey:       "secret123",
 				"display_name": "test-pwd",
 				"key_id":       "key-789",
 			},
