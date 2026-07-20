@@ -8,6 +8,11 @@ import (
 	"testing"
 )
 
+const (
+	clientIDKey = "client_id"
+	valueKey    = "value"
+)
+
 // TestAppConnectionDetails verifies that appConnectionDetails correctly
 // extracts the terraform client_id attribute and maps it to clientId
 // in the connection details secret.
@@ -20,7 +25,7 @@ func TestAppConnectionDetails(t *testing.T) {
 		{
 			name: "extracts client_id as clientId",
 			attr: map[string]any{
-				"client_id": "abc123-456-def",
+				clientIDKey: "abc123-456-def",
 			},
 			want: map[string]string{
 				"clientId": "abc123-456-def",
@@ -39,21 +44,21 @@ func TestAppConnectionDetails(t *testing.T) {
 		{
 			name: "client_id with wrong type (int) is ignored",
 			attr: map[string]any{
-				"client_id": 42,
+				clientIDKey: 42,
 			},
 			want: map[string]string{},
 		},
 		{
 			name: "client_id with wrong type (bool) is ignored",
 			attr: map[string]any{
-				"client_id": true,
+				clientIDKey: true,
 			},
 			want: map[string]string{},
 		},
 		{
 			name: "extra keys are ignored, only client_id matters",
 			attr: map[string]any{
-				"client_id":    "abc123",
+				clientIDKey:    "abc123",
 				"display_name": "test-app",
 				"object_id":    "obj-456",
 			},
@@ -64,7 +69,7 @@ func TestAppConnectionDetails(t *testing.T) {
 		{
 			name: "empty string client_id is still published",
 			attr: map[string]any{
-				"client_id": "",
+				clientIDKey: "",
 			},
 			want: map[string]string{
 				"clientId": "",
@@ -102,10 +107,10 @@ func TestPwdConnectionDetails(t *testing.T) {
 		{
 			name: "extracts value",
 			attr: map[string]any{
-				"value": "super-secret-password",
+				valueKey: "super-secret-password",
 			},
 			want: map[string]string{
-				"value": "super-secret-password",
+				valueKey: "super-secret-password",
 			},
 		},
 		{
@@ -121,28 +126,28 @@ func TestPwdConnectionDetails(t *testing.T) {
 		{
 			name: "value with wrong type (int) is ignored",
 			attr: map[string]any{
-				"value": 12345,
+				valueKey: 12345,
 			},
 			want: map[string]string{},
 		},
 		{
 			name: "extra keys are ignored, only value matters",
 			attr: map[string]any{
-				"value":        "secret123",
+				valueKey:        "secret123",
 				"display_name": "test-pwd",
 				"key_id":       "key-789",
 			},
 			want: map[string]string{
-				"value": "secret123",
+				valueKey: "secret123",
 			},
 		},
 		{
 			name: "empty string value is still published",
 			attr: map[string]any{
-				"value": "",
+				valueKey: "",
 			},
 			want: map[string]string{
-				"value": "",
+				valueKey: "",
 			},
 		},
 	}
