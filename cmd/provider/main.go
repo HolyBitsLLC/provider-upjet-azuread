@@ -241,20 +241,30 @@ func main() {
 		namespacedOpts.ChangeLogOptions = &clo
 	}
 
-	canSafeStart, err := canWatchCRD(ctx, mgr)
-	kingpin.FatalIfError(err, "SafeStart precheck failed")
-	if canSafeStart {
-		crdGate := new(gate.Gate[schema.GroupVersionKind])
-		clusterOpts.Gate = crdGate
-		namespacedOpts.Gate = crdGate
-		kingpin.FatalIfError(customresourcesgate.Setup(mgr, namespacedOpts.Options), "Cannot setup CRD gate")
-		kingpin.FatalIfError(clustercontroller.SetupGated(mgr, clusterOpts), "Cannot setup cluster-scoped AzureAD controllers")
-		kingpin.FatalIfError(namespacedcontroller.SetupGated(mgr, namespacedOpts), "Cannot setup namespaced AzureAD controllers")
+	// Always gate controllers on CRD availability.  If the provider has RBAC
+	// to watch CRDs, the gate will dynamically activate each controller as its
+	// CRD appears.  Without RBAC, controllers stay dormant — the provider still
+	// starts, serves webhooks, and becomes healthy, which allows Crossplane's
+	// post-establish hook to create MRDs (and thus CRDs).  On the next restart
+	// the gated controllers activate normally.
+	//
+	// The old behaviour (canWatchCRD → SetupGated vs Setup) caused a fatal
+	// chicken-and-egg deadlock: Setup() immediately registers all controllers,
+	// the MRStateRecorder lists every kind at startup, and a missing CRD caused
+	// the provider to crash before the post-establish hook could run.
+	crdGate := new(gate.Gate[schema.GroupVersionKind])
+	clusterOpts.Gate = crdGate
+	namespacedOpts.Gate = crdGate
+
+	_ = customresourcesgate.Setup(mgr, namespacedOpts.Options) // best-effort; CRD watch may not work without RBAC
+	if canWatch, err := canWatchCRD(ctx, mgr); err == nil && canWatch {
+		logr.Info("Provider has RBAC to watch CRDs; controllers will activate dynamically")
 	} else {
-		logr.Info("Provider has missing RBAC permissions for watching CRDs, controller SafeStart capability will be disabled")
-		kingpin.FatalIfError(clustercontroller.Setup(mgr, clusterOpts), "Cannot setup cluster-scoped AzureAD controllers")
-		kingpin.FatalIfError(namespacedcontroller.Setup(mgr, namespacedOpts), "Cannot setup namespaced AzureAD controllers")
+		logr.Info("Provider cannot watch CRDs (RBAC may be missing); controllers dormant until restart.  Serving webhooks and health probes only.")
 	}
+
+	kingpin.FatalIfError(clustercontroller.SetupGated(mgr, clusterOpts), "Cannot setup cluster-scoped AzureAD controllers")
+	kingpin.FatalIfError(namespacedcontroller.SetupGated(mgr, namespacedOpts), "Cannot setup namespaced AzureAD controllers")
 	kingpin.FatalIfError(conversion.RegisterConversions(clusterOpts.Provider, namespacedOpts.Provider, mgr.GetScheme()), "Cannot initialize the webhook conversion registry")
 	kingpin.FatalIfError(mgr.Start(ctrl.SetupSignalHandler()), "Cannot start controller manager")
 }
