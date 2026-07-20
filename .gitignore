@@ -20,3 +20,4 @@ credentials.json
 
 # asdf local tool versions
 .tool-versions
+provider
