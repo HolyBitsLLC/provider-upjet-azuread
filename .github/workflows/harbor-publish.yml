@@ -152,11 +152,14 @@ jobs:
             --entrypoint="/usr/local/bin/provider" \
             -o /tmp/runtime.tar
 
-          # Push final images to Harbor
+          # Push final image to Harbor. Do NOT push :latest — Harbor
+          # projects mark the `latest` tag immutable, so a re-push fails
+          # with HTTP 412 PRECONDITION and aborts the workflow before the
+          # Crossplane package build below can run (see Rule 06: Harbor
+          # tags are immutable; only push SHA/semver tags).
           crane push /tmp/runtime.tar "${IMAGE}"
-          crane push /tmp/runtime.tar "${REGISTRY}/${REPO}:latest"
 
-          echo "Pushed ${IMAGE} and latest"
+          echo "Pushed ${IMAGE}"
 
       - name: Install crank (Crossplane CLI)
         run: |
@@ -211,6 +214,3 @@ jobs:
 
           crane push /tmp/provider.xpkg "${IMAGE}"
           echo "Pushed Crossplane package to ${IMAGE}"
-
-          crane push /tmp/provider.xpkg "${REGISTRY}/${REPO}:latest"
-          echo "Pushed Crossplane package to ${REGISTRY}/${REPO}:latest"
