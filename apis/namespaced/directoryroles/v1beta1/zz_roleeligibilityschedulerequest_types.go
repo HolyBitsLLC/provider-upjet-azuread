@@ -10,8 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
-	v2 "github.com/crossplane/crossplane-runtime/v2/apis/common/v2"
+	v1 "github.com/crossplane/crossplane/apis/v2/core/v2"
 )
 
 type RoleEligibilityScheduleRequestInitParameters struct {
@@ -119,7 +118,7 @@ type RoleEligibilityScheduleRequestParameters struct {
 
 // RoleEligibilityScheduleRequestSpec defines the desired state of RoleEligibilityScheduleRequest
 type RoleEligibilityScheduleRequestSpec struct {
-	v2.ManagedResourceSpec `json:",inline"`
+	v1.ManagedResourceSpec `json:",inline"`
 	ForProvider            RoleEligibilityScheduleRequestParameters `json:"forProvider"`
 	// THIS IS A BETA FIELD. It will be honored
 	// unless the Management Policies feature flag is disabled.
@@ -136,8 +135,8 @@ type RoleEligibilityScheduleRequestSpec struct {
 
 // RoleEligibilityScheduleRequestStatus defines the observed state of RoleEligibilityScheduleRequest.
 type RoleEligibilityScheduleRequestStatus struct {
-	v1.ResourceStatus `json:",inline"`
-	AtProvider        RoleEligibilityScheduleRequestObservation `json:"atProvider,omitempty"`
+	v1.ManagedResourceStatus `json:",inline"`
+	AtProvider               RoleEligibilityScheduleRequestObservation `json:"atProvider,omitempty"`
 }
 
 // +kubebuilder:object:root=true

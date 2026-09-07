@@ -10,8 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
-	v2 "github.com/crossplane/crossplane-runtime/v2/apis/common/v2"
+	v1 "github.com/crossplane/crossplane/apis/v2/core/v2"
 )
 
 type ActivationRulesInitParameters struct {
@@ -1051,7 +1050,7 @@ type PrimaryApproverParameters struct {
 
 // GroupRoleManagementPolicySpec defines the desired state of GroupRoleManagementPolicy
 type GroupRoleManagementPolicySpec struct {
-	v2.ManagedResourceSpec `json:",inline"`
+	v1.ManagedResourceSpec `json:",inline"`
 	ForProvider            GroupRoleManagementPolicyParameters `json:"forProvider"`
 	// THIS IS A BETA FIELD. It will be honored
 	// unless the Management Policies feature flag is disabled.
@@ -1068,8 +1067,8 @@ type GroupRoleManagementPolicySpec struct {
 
 // GroupRoleManagementPolicyStatus defines the observed state of GroupRoleManagementPolicy.
 type GroupRoleManagementPolicyStatus struct {
-	v1.ResourceStatus `json:",inline"`
-	AtProvider        GroupRoleManagementPolicyObservation `json:"atProvider,omitempty"`
+	v1.ManagedResourceStatus `json:",inline"`
+	AtProvider               GroupRoleManagementPolicyObservation `json:"atProvider,omitempty"`
 }
 
 // +kubebuilder:object:root=true

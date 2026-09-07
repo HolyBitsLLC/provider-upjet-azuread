@@ -10,7 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	v1 "github.com/crossplane/crossplane/apis/v2/core/v2"
 )
 
 type PreAuthorizedInitParameters struct {
@@ -106,8 +106,8 @@ type PreAuthorizedParameters struct {
 
 // PreAuthorizedSpec defines the desired state of PreAuthorized
 type PreAuthorizedSpec struct {
-	v1.ResourceSpec `json:",inline"`
-	ForProvider     PreAuthorizedParameters `json:"forProvider"`
+	v1.ClusterManagedResourceSpec `json:",inline"`
+	ForProvider                   PreAuthorizedParameters `json:"forProvider"`
 	// THIS IS A BETA FIELD. It will be honored
 	// unless the Management Policies feature flag is disabled.
 	// InitProvider holds the same fields as ForProvider, with the exception
@@ -123,8 +123,8 @@ type PreAuthorizedSpec struct {
 
 // PreAuthorizedStatus defines the observed state of PreAuthorized.
 type PreAuthorizedStatus struct {
-	v1.ResourceStatus `json:",inline"`
-	AtProvider        PreAuthorizedObservation `json:"atProvider,omitempty"`
+	v1.ManagedResourceStatus `json:",inline"`
+	AtProvider               PreAuthorizedObservation `json:"atProvider,omitempty"`
 }
 
 // +kubebuilder:object:root=true

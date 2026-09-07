@@ -10,8 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
-	v2 "github.com/crossplane/crossplane-runtime/v2/apis/common/v2"
+	v1 "github.com/crossplane/crossplane/apis/v2/core/v2"
 )
 
 type ClaimsMappingPolicyInitParameters struct {
@@ -54,7 +53,7 @@ type ClaimsMappingPolicyParameters struct {
 
 // ClaimsMappingPolicySpec defines the desired state of ClaimsMappingPolicy
 type ClaimsMappingPolicySpec struct {
-	v2.ManagedResourceSpec `json:",inline"`
+	v1.ManagedResourceSpec `json:",inline"`
 	ForProvider            ClaimsMappingPolicyParameters `json:"forProvider"`
 	// THIS IS A BETA FIELD. It will be honored
 	// unless the Management Policies feature flag is disabled.
@@ -71,8 +70,8 @@ type ClaimsMappingPolicySpec struct {
 
 // ClaimsMappingPolicyStatus defines the observed state of ClaimsMappingPolicy.
 type ClaimsMappingPolicyStatus struct {
-	v1.ResourceStatus `json:",inline"`
-	AtProvider        ClaimsMappingPolicyObservation `json:"atProvider,omitempty"`
+	v1.ManagedResourceStatus `json:",inline"`
+	AtProvider               ClaimsMappingPolicyObservation `json:"atProvider,omitempty"`
 }
 
 // +kubebuilder:object:root=true

@@ -10,8 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
-	v2 "github.com/crossplane/crossplane-runtime/v2/apis/common/v2"
+	v1 "github.com/crossplane/crossplane/apis/v2/core/v2"
 )
 
 type MemberInitParameters struct {
@@ -71,7 +70,7 @@ type MemberParameters struct {
 
 // MemberSpec defines the desired state of Member
 type MemberSpec struct {
-	v2.ManagedResourceSpec `json:",inline"`
+	v1.ManagedResourceSpec `json:",inline"`
 	ForProvider            MemberParameters `json:"forProvider"`
 	// THIS IS A BETA FIELD. It will be honored
 	// unless the Management Policies feature flag is disabled.
@@ -88,8 +87,8 @@ type MemberSpec struct {
 
 // MemberStatus defines the observed state of Member.
 type MemberStatus struct {
-	v1.ResourceStatus `json:",inline"`
-	AtProvider        MemberObservation `json:"atProvider,omitempty"`
+	v1.ManagedResourceStatus `json:",inline"`
+	AtProvider               MemberObservation `json:"atProvider,omitempty"`
 }
 
 // +kubebuilder:object:root=true

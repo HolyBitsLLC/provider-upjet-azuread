@@ -10,8 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
-	v2 "github.com/crossplane/crossplane-runtime/v2/apis/common/v2"
+	v1 "github.com/crossplane/crossplane/apis/v2/core/v2"
 )
 
 type AccessPolicyInitParameters struct {
@@ -780,7 +779,7 @@ type UsersParameters struct {
 
 // AccessPolicySpec defines the desired state of AccessPolicy
 type AccessPolicySpec struct {
-	v2.ManagedResourceSpec `json:",inline"`
+	v1.ManagedResourceSpec `json:",inline"`
 	ForProvider            AccessPolicyParameters `json:"forProvider"`
 	// THIS IS A BETA FIELD. It will be honored
 	// unless the Management Policies feature flag is disabled.
@@ -797,8 +796,8 @@ type AccessPolicySpec struct {
 
 // AccessPolicyStatus defines the observed state of AccessPolicy.
 type AccessPolicyStatus struct {
-	v1.ResourceStatus `json:",inline"`
-	AtProvider        AccessPolicyObservation `json:"atProvider,omitempty"`
+	v1.ManagedResourceStatus `json:",inline"`
+	AtProvider               AccessPolicyObservation `json:"atProvider,omitempty"`
 }
 
 // +kubebuilder:object:root=true
