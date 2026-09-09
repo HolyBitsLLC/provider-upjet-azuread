@@ -7,16 +7,4 @@
 package v1beta1
 
 // Hub marks this type as a conversion hub.
-func (tr *Certificate) Hub() {}
-
-// Hub marks this type as a conversion hub.
-func (tr *ClaimsMappingPolicyAssignment) Hub() {}
-
-// Hub marks this type as a conversion hub.
-func (tr *Password) Hub() {}
-
-// Hub marks this type as a conversion hub.
 func (tr *Principal) Hub() {}
-
-// Hub marks this type as a conversion hub.
-func (tr *TokenSigningCertificate) Hub() {}

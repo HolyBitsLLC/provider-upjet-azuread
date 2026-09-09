@@ -10,19 +10,4 @@ package v1beta1
 func (tr *Application) Hub() {}
 
 // Hub marks this type as a conversion hub.
-func (tr *AppRole) Hub() {}
-
-// Hub marks this type as a conversion hub.
-func (tr *Certificate) Hub() {}
-
-// Hub marks this type as a conversion hub.
-func (tr *FederatedIdentityCredential) Hub() {}
-
-// Hub marks this type as a conversion hub.
-func (tr *FlexibleFederatedIdentityCredential) Hub() {}
-
-// Hub marks this type as a conversion hub.
 func (tr *Password) Hub() {}
-
-// Hub marks this type as a conversion hub.
-func (tr *PreAuthorized) Hub() {}
